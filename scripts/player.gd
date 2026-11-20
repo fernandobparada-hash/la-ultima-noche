@@ -127,8 +127,8 @@ func _draw() -> void:
  var frame := int(floor(walk_phase*1.9))%4 if moving else 1
  var bob := roundf(sin(walk_phase*1.9)) if moving else 0.0
  var tint := Color(1,1,1,0.5 if invulnerable>0.0 and fmod(invulnerable,0.2)>0.1 else 1.0)
- var region := Rect2(frame*64,0,64,64)
- draw_texture_rect_region(WALK[direction_name],Rect2(-32,-49+bob,64,64),region,tint)
+ var region := Rect2(frame*64,0,64,80)
+ draw_texture_rect_region(WALK[direction_name],Rect2(-32,-64+bob,64,80),region,tint)
  var weapon_color := Color("b0b6b1") if weapon_index==1 else Color("947654")
  if attack_timer>0.0 and attack_duration>0.0:
   var t := clampf(1.0-attack_timer/attack_duration,0.0,1.0)

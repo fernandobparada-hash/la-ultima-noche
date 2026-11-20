@@ -34,3 +34,10 @@ WASD/flechas: caminar · Shift: correr · C: agacharse · E: examinar · F: lint
 - Corregido error de sintaxis en `enemy.gd` heredado de Alpha 0.4.
 - Mantiene combate, armas, linterna, patrulla y controles táctiles.
 - Esta versión todavía necesita pruebas de ejecución en Godot 4.
+
+## Alpha 0.6 — protagonista y niebla
+- Sprite del protagonista redibujado: abrigo largo, pelo castaño desordenado, expresión sobria y botas.
+- Cuatro direcciones y cuatro cuadros de caminata por dirección, con silueta más clara.
+- Niebla ambiental ligera y animada en exteriores y cerca de la entrada.
+- Mantiene el código de combate, Errante, inventario de armas y controles móviles.
+- Aún pendiente: probar la ejecución en Godot y mejorar el resto del escenario.

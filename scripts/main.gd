@@ -3,6 +3,7 @@ extends Node2D
 const PlayerScript = preload("res://scripts/player.gd")
 const EnemyScript = preload("res://scripts/enemy.gd")
 const MobileControlsScript = preload("res://scripts/mobile_controls.gd")
+const FogScript = preload("res://scripts/fog.gd")
 const GROUND = preload("res://assets/ground.png")
 const WORLD_W := 1000.0
 const WORLD_H := 616.0
@@ -52,6 +53,8 @@ func _ready() -> void:
  enemy.target = player
  add_child(enemy)
  build_lighting()
+ var fog := FogScript.new()
+ add_child(fog)
  build_hud()
  mobile_controls = MobileControlsScript.new()
  add_child(mobile_controls)
