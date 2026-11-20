@@ -9,6 +9,10 @@ var suspicion := 0.0
 var last_seen := Vector2.ZERO
 var search_timer := 0.0
 var chase_cooldown := 0.0
+var health := 95.0
+var hit_flash := 0.0
+var attack_cooldown := 0.0
+var defeated := false
 
 func _ready() -> void:
  collision_layer = 4
@@ -20,10 +24,12 @@ func _ready() -> void:
  add_child(c)
 
 func _physics_process(delta: float) -> void:
- if target == null: return
+ if defeated or target==null: return
+ hit_flash = maxf(0.0,hit_flash-delta)
+ attack_cooldown = maxf(0.0,attack_cooldown-delta)
  var distance := global_position.distance_to(target.global_position)
- var heard := distance < (45.0 if target.crouched else (160.0 if target.velocity.length()>135.0 else 85.0)) and target.velocity.length()>10.0
- var seen := distance < (100.0 if target.light_on else 65.0) and has_line_of_sight()
+ var heard := distance < (42.0 if target.crouched else (160.0 if target.velocity.length()>135.0 else 85.0)) and target.velocity.length()>10.0
+ var seen := distance < (115.0 if target.light_on else 75.0) and has_line_of_sight()
  if seen:
   suspicion = minf(1.0,suspicion+delta*1.6)
   last_seen = target.global_position
@@ -38,34 +44,52 @@ func _physics_process(delta: float) -> void:
  elif suspicion>0.25 and state=="PATRULLA":
   state = "SOSPECHA"
  if state=="PERSECUCION":
-  if seen or heard:
-   chase_cooldown = 2.8
-  else:
-   chase_cooldown -= delta
-  if chase_cooldown<=0:
+  if seen or heard: chase_cooldown = 2.8
+  else: chase_cooldown -= delta
+  if chase_cooldown<=0.0:
    state="BUSQUEDA"
    search_timer=4.0
  elif state=="SOSPECHA" and suspicion<=0.1:
   state="PATRULLA"
  elif state=="BUSQUEDA":
   search_timer-=delta
-  if search_timer<=0:
-   state="PATRULLA"
+  if search_timer<=0.0: state="PATRULLA"
  var destination := global_position
- var speed := 48.0
+ var speed := 47.0
  if state=="PATRULLA" and points.size()>0:
   destination=points[point_index]
   if global_position.distance_to(destination)<12.0:
    point_index=(point_index+1)%points.size()
  elif state=="PERSECUCION":
   destination=last_seen
-  speed=95.0
+  speed=93.0
  elif state=="SOSPECHA" or state=="BUSQUEDA":
   destination=last_seen
-  speed=55.0
+  speed=53.0
  velocity=global_position.direction_to(destination)*speed if global_position.distance_to(destination)>8.0 else Vector2.ZERO
  move_and_slide()
+ if distance<24.0 and state=="PERSECUCION" and attack_cooldown<=0.0:
+  target.take_hit(12.0)
+  attack_cooldown=1.8
  queue_redraw()
+
+func receive_attack(origin: Vector2,direction: Vector2,reach: float,damage: float) -> bool:
+ if defeated: return false
+ var offset := global_position-origin
+ if offset.length()>reach+11.0: return false
+ if offset.length()>16.0 and direction.dot(offset.normalized())<0.40: return false
+ health = maxf(0.0,health-damage)
+ hit_flash = 0.20
+ suspicion = 1.0
+ last_seen = origin
+ state="PERSECUCION"
+ chase_cooldown=3.0
+ if health<=0.0:
+  defeated=true
+  velocity=Vector2.ZERO
+  state="INACTIVO"
+ queue_redraw()
+ return true
 
 func has_line_of_sight() -> bool:
  var query := PhysicsRayQueryParameters2D.create(global_position,target.global_position,2)
@@ -73,10 +97,19 @@ func has_line_of_sight() -> bool:
  return hit.is_empty()
 
 func _draw() -> void:
- draw_circle(Vector2.ZERO,12,Color("29252a"))
- draw_rect(Rect2(-7,-14,14,20),Color("6e5557"))
- draw_circle(Vector2(0,-11),6,Color("a6a0a0"))
+ draw_circle(Vector2(2,8),14,Color(0.02,0.02,0.03,0.48))
+ if defeated:
+  draw_rect(Rect2(-11,-4,22,8),Color("3b383d"))
+  draw_rect(Rect2(-5,-7,10,6),Color("777273"))
+  return
+ var coat := Color("b3a4a2") if hit_flash>0.0 else Color("4e454b")
+ draw_rect(Rect2(-6,0,5,13),Color("29272c"))
+ draw_rect(Rect2(2,0,5,13),Color("29272c"))
+ draw_rect(Rect2(-10,-13,20,19),coat)
+ draw_rect(Rect2(-7,-20,14,12),Color("85807d"))
+ draw_rect(Rect2(-9,-21,17,5),Color("242329"))
+ draw_rect(Rect2(-13,-9,4,13),coat)
+ draw_rect(Rect2(9,-9,4,13),coat)
  if state=="PERSECUCION":
-  draw_arc(Vector2.ZERO,17,0,TAU,24,Color("db7777"),2.0)
- elif state=="SOSPECHA" or state=="BUSQUEDA":
-  draw_arc(Vector2.ZERO,17,0,TAU,24,Color("d2b47d"),2.0)
+  draw_circle(Vector2(-3,-14),1.5,Color("d99d82"))
+  draw_circle(Vector2(3,-14),1.5,Color("d99d82"))

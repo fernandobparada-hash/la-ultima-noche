@@ -1,7 +1,7 @@
 config_version=5
 
 [application]
-config/name="La Última Noche - Prototipo 0.1"
+config/name="La Última Noche - Capítulo Cero - Alpha 0.2"
 run/main_scene="res://scenes/main.tscn"
 config/features=PackedStringArray("4.2", "GL Compatibility")
 
@@ -24,3 +24,8 @@ run={"deadzone":0.2,"events":[Object(InputEventKey,"physical_keycode":4194325)]}
 crouch={"deadzone":0.2,"events":[Object(InputEventKey,"physical_keycode":67)]}
 interact={"deadzone":0.2,"events":[Object(InputEventKey,"physical_keycode":69)]}
 flashlight={"deadzone":0.2,"events":[Object(InputEventKey,"physical_keycode":70)]}
+
+attack_light={"deadzone":0.2,"events":[Object(InputEventKey,"physical_keycode":74)]}
+attack_heavy={"deadzone":0.2,"events":[Object(InputEventKey,"physical_keycode":75)]}
+switch_weapon={"deadzone":0.2,"events":[Object(InputEventKey,"physical_keycode":81)]}
+restart={"deadzone":0.2,"events":[Object(InputEventKey,"physical_keycode":82)]}
