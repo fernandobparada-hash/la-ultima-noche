@@ -2,22 +2,18 @@
 
 Versión web: https://fernandobparada-hash.github.io/la-ultima-noche/
 
+Desde la Alpha 0.3 el propio juego detecta si está en PC o en celular y trae sus controles
+táctiles (`scripts/mobile_controls.gd`), así que ya **no** se usa nada extra en la página web.
+
 ## Qué se añadió para la web (fuera del juego)
 - `export_presets.cfg`: exportación Web de Godot 4.3 (sin hilos, no necesita cabeceras especiales).
 - `docs/`: el juego exportado que publica GitHub Pages.
-- `web-extra/touch-controls.js`: joystick y botones táctiles (Correr, Agachar, Linterna, Usar,
-  Atacar, Fuerte, Arma; Reiniciar solo al morir). Solo simulan las teclas del juego y solo aparecen cuando
-  el juego dice que está en un celular.
+- `.gitignore`: ignora `.godot/` y los `*.import` que Godot genera al abrir el proyecto.
 
-## Único cambio dentro del juego (pedido: "que el juego sepa cuándo está en PC y cuándo en celular")
-- Nuevo `scripts/device.gd` (autoload `Dispositivo`): detecta celular/tablet y avisa a la página web;
-  en celular también avisa cuando el jugador muere (lee `game_over` de main.gd) para que el botón
-  "Reiniciar" solo aparezca al morir.
-- `project.godot`: sección `[autoload]` con `Dispositivo="*res://scripts/device.gd"`.
-- `scripts/main.gd`: 2 líneas — la ayuda de controles del HUD y el mensaje "Pulsa R" usan
-  `Dispositivo.ayuda_controles()` / `Dispositivo.ayuda_reiniciar()`.
+Los archivos del juego (README.md, project.godot, scenes/, scripts/, assets/) están tal cual
+los envió Fernando.
 
 ## Volver a exportar
-Godot 4.3 → Proyecto → Exportar → Web → exportar a `docs/lun-<versión>.html`, renombrar ese
-HTML a `docs/index.html` y copiar `web-extra/touch-controls.js` dentro de `docs/`.
-(Cambiar el nombre en cada versión hace que los navegadores descarguen el juego nuevo.)
+Godot 4.3 → Proyecto → Exportar → Web → exportar a `docs/lun-<versión>.html` y renombrar ese
+HTML a `docs/index.html`. (Cambiar el nombre en cada versión hace que los navegadores
+descarguen el juego nuevo.)
