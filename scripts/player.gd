@@ -17,6 +17,7 @@ var attack_timer := 0.0
 var attack_flash := 0.0
 var invulnerable := 0.0
 var walk_phase := 0.0
+const SPRITES = {"down": preload("res://assets/player_down.png"), "up": preload("res://assets/player_up.png"), "left": preload("res://assets/player_left.png"), "right": preload("res://assets/player_right.png")}
 
 func _ready() -> void:
  collision_layer = 1
@@ -99,21 +100,13 @@ func take_hit(amount: float) -> void:
  queue_redraw()
 
 func _draw() -> void:
- # Pixel-inspired layered sprite; no external assets required.
- var alpha := 0.5 if invulnerable>0.0 and fmod(invulnerable,0.2)>0.1 else 1.0
- draw_circle(Vector2(2,7),13,Color(0.02,0.03,0.04,0.42))
- var step := sin(walk_phase)*2.0 if velocity.length()>5 else 0.0
- var coat := Color("303c49")
- coat.a = alpha
- draw_rect(Rect2(-7,0,6,13+step),Color("1b232a"))
- draw_rect(Rect2(2,0,6,13-step),Color("1b232a"))
- draw_rect(Rect2(-10,-11,20,18),coat)
- draw_rect(Rect2(-3,-9,6,15),Color("4d5963"))
- draw_rect(Rect2(-8,-18,16,12),Color("bd9e83"))
- draw_rect(Rect2(-9,-19,18,5),Color("292527"))
- draw_rect(Rect2(-10,-15,4,7),Color("292527"))
- draw_rect(Rect2(-13,-8,4,12),coat)
- draw_rect(Rect2(9,-8,4,12),coat)
+ var direction_name := "down"
+ if absf(facing.x)>absf(facing.y):
+  direction_name = "right" if facing.x>0 else "left"
+ elif facing.y<0:
+  direction_name = "up"
+ var bob := sin(walk_phase)*1.2 if velocity.length()>5 else 0.0
+ draw_texture(SPRITES[direction_name],Vector2(-32,-49+bob),Color(1,1,1,0.5 if invulnerable>0.0 and fmod(invulnerable,0.2)>0.1 else 1.0))
  if attack_flash>0.0:
   var weapon_tip := facing*(47.0 if weapon_index==1 else 36.0)
   draw_line(facing*11.0,weapon_tip,Color("c6c9bf" if weapon_index==1 else "947655"),4.0 if weapon_index==1 else 3.0)

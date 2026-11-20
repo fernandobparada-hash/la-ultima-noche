@@ -2,6 +2,8 @@ extends Node2D
 
 const PlayerScript = preload("res://scripts/player.gd")
 const EnemyScript = preload("res://scripts/enemy.gd")
+const MobileControlsScript = preload("res://scripts/mobile_controls.gd")
+const GROUND = preload("res://assets/ground.png")
 const WORLD_W := 1000.0
 const WORLD_H := 616.0
 
@@ -20,6 +22,9 @@ var door_body: StaticBody2D
 var game_over := false
 var world_time := 0.0
 var lamps: Array[PointLight2D] = []
+var mobile_controls: NightMobileControls
+var death_panel: ColorRect
+var death_label: Label
 
 const WALLS := [
  Rect2(0,0,1000,16),Rect2(0,600,1000,16),Rect2(0,0,16,616),Rect2(984,0,16,616),
@@ -48,6 +53,9 @@ func _ready() -> void:
  add_child(enemy)
  build_lighting()
  build_hud()
+ mobile_controls = MobileControlsScript.new()
+ add_child(mobile_controls)
+ mobile_controls.respawn_requested.connect(respawn_player)
  show_message("Despiertas en una casa desconocida. Busca respuestas.",5.0)
 
 func add_obstacle(area: Rect2) -> StaticBody2D:
@@ -97,13 +105,13 @@ func build_hud() -> void:
  var canvas := CanvasLayer.new()
  add_child(canvas)
  var panel := ColorRect.new()
- panel.color=Color(0.035,0.055,0.068,0.92)
+ panel.color=Color(0.055,0.074,0.078,0.94)
  panel.position=Vector2(9,9)
- panel.size=Vector2(942,75)
+ panel.size=Vector2(942,62)
  canvas.add_child(panel)
  var border := ColorRect.new()
  border.color=Color("9c8060")
- border.position=Vector2(9,82)
+ border.position=Vector2(9,71)
  border.size=Vector2(942,2)
  canvas.add_child(border)
  ui=Label.new()
@@ -112,17 +120,35 @@ func build_hud() -> void:
  ui.add_theme_color_override("font_color",Color("e8e0cd"))
  canvas.add_child(ui)
  objective=Label.new()
- objective.position=Vector2(20,89)
+ objective.position=Vector2(20,82)
  objective.add_theme_font_size_override("font_size",15)
  objective.add_theme_color_override("font_color",Color("d6c099"))
  canvas.add_child(objective)
  notice=Label.new()
- notice.position=Vector2(20,120)
+ notice.position=Vector2(20,113)
  notice.add_theme_font_size_override("font_size",18)
  notice.add_theme_color_override("font_color",Color("f4dcaa"))
  notice.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
  notice.custom_minimum_size=Vector2(800,0)
  canvas.add_child(notice)
+ death_panel=ColorRect.new()
+ death_panel.color=Color(0.035,0.045,0.05,0.82)
+ death_panel.position=Vector2.ZERO
+ death_panel.size=Vector2(960,540)
+ death_panel.visible=false
+ canvas.add_child(death_panel)
+ death_label=Label.new()
+ death_label.text="LA NOCHE NO HA TERMINADO"
+ death_label.position=Vector2(140,215)
+ death_label.size=Vector2(680,80)
+ death_label.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
+ death_label.add_theme_font_size_override("font_size",32)
+ death_label.add_theme_color_override("font_color",Color("e5d4b9"))
+ death_panel.add_child(death_label)
+
+func respawn_player() -> void:
+ if game_over:
+  get_tree().reload_current_scene()
 
 func _process(delta: float) -> void:
  world_time+=delta
@@ -135,12 +161,16 @@ func _process(delta: float) -> void:
   interact()
  if player.health<=0.0 and not game_over:
   game_over=true
-  show_message("La oscuridad te alcanza. %s para volver a despertar." % Dispositivo.ayuda_reiniciar(),999.0)
+  player.set_physics_process(false)
+  enemy.set_physics_process(false)
+  mobile_controls.set_dead(true)
+  death_panel.visible=true
+  show_message("La oscuridad te alcanza. " + ("Toca REAPARECER." if mobile_controls.is_mobile else "Pulsa R para reaparecer."),999.0)
  if game_over and Input.is_action_just_pressed("restart"):
-  get_tree().reload_current_scene()
+  respawn_player()
  var status := "INACTIVO" if enemy.defeated else enemy.state
- ui.text="LA ÚLTIMA NOCHE   |   VIDA %d/100   |   ENERGÍA %d/100   |   ARMA: %s   |   LINTERNA: %s\n%s" % [int(player.health),int(player.stamina),player.weapons[player.weapon_index],"ON" if player.light_on else "OFF",Dispositivo.ayuda_controles()]
- objective.text="OBJETIVO: %s   ·   ERRANTE: %s" % ["Explora la calle y evita al Errante" if found_exit else ("Abre la puerta de salida" if took_key else "Busca la llave en la cocina"),status]
+ ui.text="LA ÚLTIMA NOCHE   /   CAPÍTULO CERO\nVIDA %d   ·   ENERGÍA %d   ·   %s   ·   LINTERNA %s" % [int(player.health),int(player.stamina),player.weapons[player.weapon_index],"ENCENDIDA" if player.light_on else "APAGADA"]
+ objective.text="OBJETIVO  /  %s" % ["Explora la calle y evita al Errante" if found_exit else ("Abre la puerta de salida" if took_key else "Busca la llave en la cocina")]
  if player.position.x>500.0 and player.position.y>355.0 and not found_exit:
   found_exit=true
   show_message("Has salido al barrio residencial. El Errante patrulla la calle.",5.0)
@@ -180,21 +210,8 @@ func show_message(message: String,duration: float) -> void:
  message_time=duration
 
 func _draw() -> void:
- # Ground, street and floor patterns.
- draw_rect(Rect2(0,0,WORLD_W,WORLD_H),Color("222c30"))
- draw_rect(Rect2(470,350,514,250),Color("313a3d"))
- for y in range(365,600,36):
-  draw_line(Vector2(470,y),Vector2(984,y),Color("3c4546"),1.0)
- for x in range(480,984,64):
-  draw_line(Vector2(x,365),Vector2(x,600),Color("394345"),1.0)
- draw_rect(Rect2(40,40,430,310),Color("4b4943"))
- draw_rect(Rect2(54,54,195,150),Color("4e4943"))
- draw_rect(Rect2(262,54,194,150),Color("454743"))
- draw_rect(Rect2(54,217,402,119),Color("4c4a43"))
- for x in range(55,450,26):
-  draw_line(Vector2(x,55),Vector2(x,334),Color(0.25,0.25,0.23,0.23),1.0)
- for y in range(60,335,26):
-  draw_line(Vector2(54,y),Vector2(455,y),Color(0.19,0.19,0.18,0.20),1.0)
+ # Authored, pixel-quantized texture; nearest-neighbor filtering.
+ draw_texture(GROUND,Vector2.ZERO)
  # Bedroom rug and bedding.
  draw_rect(Rect2(76,73,113,74),Color("595147"))
  draw_rect(Rect2(80,77,105,66),Color("706255"),false,3.0)

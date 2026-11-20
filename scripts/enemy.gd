@@ -13,6 +13,7 @@ var health := 95.0
 var hit_flash := 0.0
 var attack_cooldown := 0.0
 var defeated := false
+const SPRITES = {"down": preload("res://assets/errante_down.png"), "up": preload("res://assets/errante_up.png"), "left": preload("res://assets/errante_left.png"), "right": preload("res://assets/errante_right.png")}
 
 func _ready() -> void:
  collision_layer = 4
@@ -97,19 +98,13 @@ func has_line_of_sight() -> bool:
  return hit.is_empty()
 
 func _draw() -> void:
- draw_circle(Vector2(2,8),14,Color(0.02,0.02,0.03,0.48))
  if defeated:
-  draw_rect(Rect2(-11,-4,22,8),Color("3b383d"))
-  draw_rect(Rect2(-5,-7,10,6),Color("777273"))
+  draw_rect(Rect2(-13,-4,26,8),Color("3b383d"))
+  draw_rect(Rect2(-6,-7,12,6),Color("777273"))
   return
- var coat := Color("b3a4a2") if hit_flash>0.0 else Color("4e454b")
- draw_rect(Rect2(-6,0,5,13),Color("29272c"))
- draw_rect(Rect2(2,0,5,13),Color("29272c"))
- draw_rect(Rect2(-10,-13,20,19),coat)
- draw_rect(Rect2(-7,-20,14,12),Color("85807d"))
- draw_rect(Rect2(-9,-21,17,5),Color("242329"))
- draw_rect(Rect2(-13,-9,4,13),coat)
- draw_rect(Rect2(9,-9,4,13),coat)
- if state=="PERSECUCION":
-  draw_circle(Vector2(-3,-14),1.5,Color("d99d82"))
-  draw_circle(Vector2(3,-14),1.5,Color("d99d82"))
+ var direction_name := "down"
+ if absf(velocity.x)>absf(velocity.y):
+  direction_name = "right" if velocity.x>0 else "left"
+ elif velocity.y<0:
+  direction_name = "up"
+ draw_texture(SPRITES[direction_name],Vector2(-32,-49),Color("e3d3ca") if hit_flash>0.0 else Color.WHITE)
