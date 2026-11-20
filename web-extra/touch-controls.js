@@ -31,6 +31,7 @@
     '#tc-knob{position:absolute;left:50%;top:50%;width:14vmin;height:14vmin;margin:-7vmin 0 0 -7vmin;border-radius:50%;background:rgba(255,255,255,.35)}' +
     '#tc-btns{position:absolute;right:3vmin;bottom:4vmin;display:grid;grid-template-columns:repeat(3,15vmin);gap:2vmin;pointer-events:none}' +
     '.tc-b{pointer-events:auto;touch-action:none;width:15vmin;height:15vmin;border-radius:50%;background:rgba(255,255,255,.14);border:2px solid rgba(255,255,255,.3);color:#eee;font-size:2.8vmin;display:flex;align-items:center;justify-content:center;text-align:center;line-height:1.1}' +
+    '#tc-restart{visibility:hidden}#tc.dead #tc-restart{visibility:visible;opacity:1;background:rgba(234,217,172,.55);border-color:#f4dcaa;color:#111;font-weight:700}' +
     '.tc-b.atk{background:rgba(190,80,70,.30);border-color:rgba(230,140,120,.55)}.tc-b.sm{opacity:.75}.tc-b.on{background:rgba(234,217,172,.45)}' +
     '#tc-rot{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.85);color:#ead9ac;font:600 20px sans-serif;text-align:center;padding:20px;z-index:11}' +
     '@media (orientation:portrait){#tc-rot{display:flex}}';
@@ -39,7 +40,7 @@
     var root = document.createElement('div'); root.id = 'tc';
     root.innerHTML = '<div id="tc-joy"><div id="tc-knob"></div></div>' +
       '<div id="tc-btns">' +
-      '<div class="tc-b sm" data-code="KeyR" data-mode="tap">↻<br>Reiniciar</div>' +
+      '<div class="tc-b sm" id="tc-restart" data-code="KeyR" data-mode="tap">↻<br>Reiniciar</div>' +
       '<div class="tc-b" data-code="KeyF" data-mode="tap">🔦<br>Linterna</div>' +
       '<div class="tc-b" data-code="KeyQ" data-mode="tap">🔁<br>Arma</div>' +
       '<div class="tc-b" data-code="KeyE" data-mode="tap">✋<br>Usar</div>' +
@@ -84,7 +85,12 @@
       b.addEventListener('pointerup', up); b.addEventListener('pointercancel', up);
     });
     document.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+    applyDead();
   }
+  // El juego avisa cuando el jugador muere / revive: "Reiniciar" solo se ve al morir.
+  var dead = false;
+  function applyDead() { var r = document.getElementById('tc'); if (r) r.classList.toggle('dead', dead); }
+  window.lunSetDead = function (on) { dead = !!on; applyDead(); };
   var built = false;
   window.lunSetTouch = function (on) {
     window.lunIsMobile = !!on;

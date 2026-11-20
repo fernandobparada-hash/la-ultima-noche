@@ -13,6 +13,17 @@ func _ready() -> void:
  if OS.has_feature("web"):
   JavaScriptBridge.eval("window.lunSetTouch && window.lunSetTouch(%s)" % ("true" if es_movil else "false"))
 
+var _muerto := false
+
+# Avisa a la página si el jugador murió (usa la variable game_over de main.gd), para mostrar "Reiniciar" solo entonces.
+func _process(_delta: float) -> void:
+ if not es_movil or not OS.has_feature("web"): return
+ var escena := get_tree().current_scene
+ var muerto: bool = escena != null and escena.get("game_over") == true
+ if muerto != _muerto:
+  _muerto = muerto
+  JavaScriptBridge.eval("window.lunSetDead && window.lunSetDead(%s)" % ("true" if muerto else "false"))
+
 func ayuda_controles() -> String:
  if es_movil:
   return "Joystick mover · Correr · Agachar · Linterna · Usar · Atacar · Fuerte · Arma"
