@@ -135,11 +135,11 @@ func _process(delta: float) -> void:
   interact()
  if player.health<=0.0 and not game_over:
   game_over=true
-  show_message("La oscuridad te alcanza. Pulsa R para volver a despertar.",999.0)
+  show_message("La oscuridad te alcanza. %s para volver a despertar." % Dispositivo.ayuda_reiniciar(),999.0)
  if game_over and Input.is_action_just_pressed("restart"):
   get_tree().reload_current_scene()
  var status := "INACTIVO" if enemy.defeated else enemy.state
- ui.text="LA ÚLTIMA NOCHE   |   VIDA %d/100   |   ENERGÍA %d/100   |   ARMA: %s   |   LINTERNA: %s\nWASD mover · Shift correr · C sigilo · F linterna · E interactuar · J golpe · K golpe fuerte · Q cambiar arma" % [int(player.health),int(player.stamina),player.weapons[player.weapon_index],"ON" if player.light_on else "OFF"]
+ ui.text="LA ÚLTIMA NOCHE   |   VIDA %d/100   |   ENERGÍA %d/100   |   ARMA: %s   |   LINTERNA: %s\n%s" % [int(player.health),int(player.stamina),player.weapons[player.weapon_index],"ON" if player.light_on else "OFF",Dispositivo.ayuda_controles()]
  objective.text="OBJETIVO: %s   ·   ERRANTE: %s" % ["Explora la calle y evita al Errante" if found_exit else ("Abre la puerta de salida" if took_key else "Busca la llave en la cocina"),status]
  if player.position.x>500.0 and player.position.y>355.0 and not found_exit:
   found_exit=true
