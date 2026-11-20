@@ -13,7 +13,10 @@ var health := 95.0
 var hit_flash := 0.0
 var attack_cooldown := 0.0
 var defeated := false
-const SPRITES = {"down": preload("res://assets/errante_down.png"), "up": preload("res://assets/errante_up.png"), "left": preload("res://assets/errante_left.png"), "right": preload("res://assets/errante_right.png")}
+const WALK = {"down": preload("res://assets/errante_walk_down.png"), "up": preload("res://assets/errante_walk_up.png"), "left": preload("res://assets/errante_walk_left.png"), "right": preload("res://assets/errante_walk_right.png")}
+var animation_time := 0.0
+var last_direction := Vector2.DOWN
+var stagger := 0.0
 
 func _ready() -> void:
  collision_layer = 4
@@ -26,7 +29,9 @@ func _ready() -> void:
 
 func _physics_process(delta: float) -> void:
  if defeated or target==null: return
+ animation_time += delta*(2.4 if state=="PERSECUCION" else 1.35)
  hit_flash = maxf(0.0,hit_flash-delta)
+ stagger = maxf(0.0,stagger-delta)
  attack_cooldown = maxf(0.0,attack_cooldown-delta)
  var distance := global_position.distance_to(target.global_position)
  var heard := distance < (42.0 if target.crouched else (160.0 if target.velocity.length()>135.0 else 85.0)) and target.velocity.length()>10.0
@@ -68,6 +73,10 @@ func _physics_process(delta: float) -> void:
   destination=last_seen
   speed=53.0
  velocity=global_position.direction_to(destination)*speed if global_position.distance_to(destination)>8.0 else Vector2.ZERO
+ if stagger>0.0:
+  velocity *= 0.25
+ if velocity.length()>3.0:
+  last_direction=velocity.normalized()
  move_and_slide()
  if distance<24.0 and state=="PERSECUCION" and attack_cooldown<=0.0:
   target.take_hit(12.0)
@@ -81,6 +90,7 @@ func receive_attack(origin: Vector2,direction: Vector2,reach: float,damage: floa
  if offset.length()>16.0 and direction.dot(offset.normalized())<0.40: return false
  health = maxf(0.0,health-damage)
  hit_flash = 0.20
+ stagger = 0.18
  suspicion = 1.0
  last_seen = origin
  state="PERSECUCION"
@@ -99,12 +109,22 @@ func has_line_of_sight() -> bool:
 
 func _draw() -> void:
  if defeated:
+  draw_ellipse_shadow()
   draw_rect(Rect2(-13,-4,26,8),Color("3b383d"))
   draw_rect(Rect2(-6,-7,12,6),Color("777273"))
   return
+ draw_ellipse_shadow()
  var direction_name := "down"
- if absf(velocity.x)>absf(velocity.y):
-  direction_name = "right" if velocity.x>0 else "left"
- elif velocity.y<0:
+ if absf(last_direction.x)>absf(last_direction.y):
+  direction_name = "right" if last_direction.x>0 else "left"
+ elif last_direction.y<0:
   direction_name = "up"
- draw_texture(SPRITES[direction_name],Vector2(-32,-49),Color("e3d3ca") if hit_flash>0.0 else Color.WHITE)
+ var frame := int(animation_time*3.0)%4 if velocity.length()>5.0 else 1
+ var shudder := sin(animation_time*3.2)*0.7
+ var color := Color("e7c9b9") if hit_flash>0.0 else Color.WHITE
+ draw_texture_rect_region(WALK[direction_name],Rect2(-32+shudder,-49,64,64),Rect2(frame*64,0,64,64),color)
+
+func draw_ellipse_shadow() -> void:
+ draw_set_transform(Vector2(0,11),0.0,Vector2(1.0,0.32))
+ draw_circle(Vector2.ZERO,14.0,Color(0.03,0.04,0.05,0.40))
+ draw_set_transform(Vector2.ZERO)

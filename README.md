@@ -25,3 +25,12 @@ WASD/flechas: caminar · Shift: correr · C: agacharse · E: examinar · F: lint
 - No se ha podido ejecutar Godot en este entorno, por lo que **no se garantiza que la versión esté libre de errores**. Si Godot señala una línea, envíala para corregirla.
 - Para publicar en Android/iOS se necesita configurar las plantillas de exportación de Godot y probar en el dispositivo.
 - Los sprites aún no tienen animación por fotogramas; el Errante aún no tiene navegación completa.
+
+## Alpha 0.5 — pase de arte retro
+- Suelos reconstruidos con baldosas y patrones de píxel consistentes.
+- Calle con adoquines, grietas y detalles de piedra.
+- Vegetación de siluetas cuadradas, sin círculos suaves.
+- Ataques y movimiento con posiciones cuantizadas a píxeles.
+- Corregido error de sintaxis en `enemy.gd` heredado de Alpha 0.4.
+- Mantiene combate, armas, linterna, patrulla y controles táctiles.
+- Esta versión todavía necesita pruebas de ejecución en Godot 4.

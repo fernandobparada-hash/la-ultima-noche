@@ -17,7 +17,14 @@ var attack_timer := 0.0
 var attack_flash := 0.0
 var invulnerable := 0.0
 var walk_phase := 0.0
-const SPRITES = {"down": preload("res://assets/player_down.png"), "up": preload("res://assets/player_up.png"), "left": preload("res://assets/player_left.png"), "right": preload("res://assets/player_right.png")}
+const WALK = {"down": preload("res://assets/player_walk_down.png"), "up": preload("res://assets/player_walk_up.png"), "left": preload("res://assets/player_walk_left.png"), "right": preload("res://assets/player_walk_right.png")}
+var attack_duration := 0.0
+var attack_heavy := false
+var attack_facing := Vector2.DOWN
+var attack_damage_done := false
+var attack_reach := 38.0
+var attack_damage := 18.0
+var idle_time := 0.0
 
 func _ready() -> void:
  collision_layer = 1
@@ -52,7 +59,13 @@ func make_light_texture() -> Texture2D:
  return ImageTexture.create_from_image(img)
 
 func _physics_process(delta: float) -> void:
+ idle_time += delta
  attack_timer = maxf(0.0,attack_timer-delta)
+ if attack_duration>0.0 and not attack_damage_done:
+  var progress := 1.0-attack_timer/attack_duration
+  if progress >= (0.47 if attack_heavy else 0.38):
+   attacked.emit(global_position,attack_facing,attack_reach,attack_damage)
+   attack_damage_done=true
  attack_flash = maxf(0.0,attack_flash-delta)
  invulnerable = maxf(0.0,invulnerable-delta)
  var direction := Input.get_vector("move_left","move_right","move_up","move_down")
@@ -87,10 +100,15 @@ func do_attack(heavy: bool) -> void:
  if stamina<cost: return
  stamina -= cost
  attack_timer = 0.72 if heavy else 0.36
+ attack_duration = attack_timer
+ attack_heavy = heavy
+ attack_facing = facing
+ attack_damage_done = false
  attack_flash = 0.20
  var reach := 48.0 if weapon_index==1 else 38.0
  var damage := (32.0 if heavy else 18.0)*(1.3 if weapon_index==1 else 1.0)
- attacked.emit(global_position,facing,reach,damage)
+ attack_reach = reach
+ attack_damage = damage
 
 func take_hit(amount: float) -> void:
  if invulnerable>0.0 or health<=0.0: return
@@ -105,11 +123,27 @@ func _draw() -> void:
   direction_name = "right" if facing.x>0 else "left"
  elif facing.y<0:
   direction_name = "up"
- var bob := sin(walk_phase)*1.2 if velocity.length()>5 else 0.0
- draw_texture(SPRITES[direction_name],Vector2(-32,-49+bob),Color(1,1,1,0.5 if invulnerable>0.0 and fmod(invulnerable,0.2)>0.1 else 1.0))
- if attack_flash>0.0:
-  var weapon_tip := facing*(47.0 if weapon_index==1 else 36.0)
-  draw_line(facing*11.0,weapon_tip,Color("c6c9bf" if weapon_index==1 else "947655"),4.0 if weapon_index==1 else 3.0)
-  draw_arc(facing*20.0,21.0,facing.angle()-0.85,facing.angle()+0.85,12,Color(0.95,0.85,0.65,0.65),2.0)
+ var moving := velocity.length()>5.0
+ var frame := int(floor(walk_phase*1.9))%4 if moving else 1
+ var bob := roundf(sin(walk_phase*1.9)) if moving else 0.0
+ var tint := Color(1,1,1,0.5 if invulnerable>0.0 and fmod(invulnerable,0.2)>0.1 else 1.0)
+ var region := Rect2(frame*64,0,64,64)
+ draw_texture_rect_region(WALK[direction_name],Rect2(-32,-49+bob,64,64),region,tint)
+ var weapon_color := Color("b0b6b1") if weapon_index==1 else Color("947654")
+ if attack_timer>0.0 and attack_duration>0.0:
+  var t := clampf(1.0-attack_timer/attack_duration,0.0,1.0)
+  # Preparación, barrido y recuperación: la trayectoria acompaña al golpe.
+  var angle := lerpf(-1.2,1.35,smoothstep(0.15,0.8,t))
+  var base := attack_facing.angle()+angle
+  var hand := attack_facing*9.0+Vector2(0,-7)
+  hand = hand.round()
+  var length := 31.0 if weapon_index==1 else 25.0
+  var tip := hand+Vector2.RIGHT.rotated(base)*length
+  draw_line(hand,tip.round(),Color("20262a"),6.0)
+  draw_line(hand,tip.round(),weapon_color,4.0)
+  draw_rect(Rect2(tip.round()-Vector2(2,2),Vector2(4,4)),Color("d6d3c5"))
+  if t>0.25 and t<0.78:
+   var center := attack_facing*12.0+Vector2(0,-7)
+   draw_arc(center.round(),length,attack_facing.angle()-0.85,attack_facing.angle()+0.85,9,Color(0.92,0.85,0.68,0.42),2.0)
  else:
-  draw_line(facing*7.0,facing*20.0,Color("8f9590" if weapon_index==1 else "806346"),3.0)
+  draw_line(facing*7.0+Vector2(0,-7),facing*20.0+Vector2(0,-7),weapon_color,3.0)
