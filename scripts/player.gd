@@ -17,6 +17,9 @@ var attack_timer := 0.0
 var attack_flash := 0.0
 var invulnerable := 0.0
 var walk_phase := 0.0
+var run_state := false
+var anim_time := 0.0
+var anim_state := "idle"
 const ATTACK_SHEETS = [
  [
   {"down": preload("res://assets/attack_0_down_light.png"), "up": preload("res://assets/attack_0_up_light.png"), "left": preload("res://assets/attack_0_left_light.png"), "right": preload("res://assets/attack_0_right_light.png")},
@@ -46,7 +49,24 @@ const WEAPON_ART = [
  preload("res://assets/weapon_llave.png"),
  preload("res://assets/weapon_pistola.png")
 ]
-const WALK = {"down": preload("res://assets/hero_full_down.png"), "up": preload("res://assets/hero_full_up.png"), "left": preload("res://assets/hero_full_left.png"), "right": preload("res://assets/hero_full_right.png")}
+const LOCO = {
+ "idle": {"down": preload("res://assets/pj_idle_down.png"), "up": preload("res://assets/pj_idle_up.png"), "left": preload("res://assets/pj_idle_left.png"), "right": preload("res://assets/pj_idle_right.png")},
+ "walk": {"down": preload("res://assets/pj_walk_down.png"), "up": preload("res://assets/pj_walk_up.png"), "left": preload("res://assets/pj_walk_left.png"), "right": preload("res://assets/pj_walk_right.png")},
+ "run": {"down": preload("res://assets/pj_run_down.png"), "up": preload("res://assets/pj_run_up.png"), "left": preload("res://assets/pj_run_left.png"), "right": preload("res://assets/pj_run_right.png")}
+}
+# Fotograma de 128x144 px; los pies quedan 7 px por debajo del origen del jugador.
+const FRAME_W := 128
+const FRAME_H := 144
+const DRAW_RECT := Rect2(-64,-113,128,144)
+const CROUCH_SCALE := 0.93
+const WEAPON_SCALE := 0.66
+const WEAPON_GRIP = [Vector2(12,25),Vector2(10,25),Vector2(12,27),Vector2(12,30),Vector2(24,28)]
+const CARRY = {
+ "down": {"pos": Vector2(-17,-17), "angle": -115.0, "gun": 150.0},
+ "up": {"pos": Vector2(17,-17), "angle": -65.0, "gun": 30.0},
+ "right": {"pos": Vector2(-2,-17), "angle": 35.0, "gun": 15.0},
+ "left": {"pos": Vector2(2,-17), "angle": 145.0, "gun": 165.0}
+}
 var attack_duration := 0.0
 var attack_heavy := false
 var attack_facing := Vector2.DOWN
@@ -96,7 +116,7 @@ func _physics_process(delta: float) -> void:
  attack_timer = maxf(0.0,attack_timer-delta)
  if attack_duration>0.0 and not attack_damage_done:
   var progress := 1.0-attack_timer/attack_duration
-  if progress >= (0.47 if attack_heavy else 0.38):
+  if progress >= (0.34 if weapons[weapon_index]=="Pistola" else 0.5):
    attacked.emit(global_position,attack_facing,attack_reach,attack_damage)
    attack_damage_done=true
  attack_flash = maxf(0.0,attack_flash-delta)
@@ -108,6 +128,7 @@ func _physics_process(delta: float) -> void:
  var running := Input.is_action_pressed("run") and not crouched and stamina>1.0 and direction.length()>0.0
  var speed := 62.0 if crouched else (158.0 if running else 103.0)
  velocity = direction*speed
+ run_state = running
  move_and_slide()
  if direction.length()>0.1:
   facing = direction.normalized()
@@ -124,6 +145,13 @@ func _physics_process(delta: float) -> void:
   do_attack(false)
  if Input.is_action_just_pressed("attack_heavy"):
   do_attack(true)
+ var state := "idle"
+ if velocity.length()>5.0:
+  state = "run" if run_state else "walk"
+ if state != anim_state:
+  anim_state = state
+  anim_time = 0.0
+ anim_time += delta
  light.visible = light_on
  cone.visible = light_on
  cone.rotation = facing.angle()
@@ -164,14 +192,11 @@ func _draw() -> void:
   direction_name = "right" if facing.x>0 else "left"
  elif facing.y<0:
   direction_name = "up"
- var moving := velocity.length()>5.0
- var frame := int(floor(walk_phase*1.9))%4 if moving else 1
- var bob := roundf(sin(walk_phase*1.9)) if moving else 0.0
  var tint := Color(1,1,1,0.5 if invulnerable>0.0 and fmod(invulnerable,0.2)>0.1 else 1.0)
- var region := Rect2(frame*64,0,64,96)
- if attack_timer<=0.0:
-  draw_texture_rect_region(WALK[direction_name],Rect2(-32,-85+bob,64,96),region,tint)
- # La animación completa reúne cuerpo, brazo y arma en el mismo fotograma.
+ var dest := DRAW_RECT
+ if crouched and attack_timer<=0.0:
+  dest = Rect2(-64.0*CROUCH_SCALE,7.0-120.0*CROUCH_SCALE,FRAME_W*CROUCH_SCALE,FRAME_H*CROUCH_SCALE)
+ # Ataque: cada fotograma ya trae cuerpo, brazo y arma (6 fases).
  if attack_timer>0.0 and attack_duration>0.0:
   var progress: float = clampf(1.0-attack_timer/attack_duration,0.0,0.999)
   var attack_frame: int = mini(5,int(progress*6.0))
@@ -181,8 +206,31 @@ func _draw() -> void:
   elif attack_facing.y<0.0:
    attack_dir = "up"
   var attack_sheet: Texture2D = ATTACK_SHEETS[weapon_index][1 if attack_heavy else 0][attack_dir]
-  draw_texture_rect_region(attack_sheet,Rect2(-32,-85+bob,64,96),Rect2(attack_frame*64,0,64,96),tint)
- else:
-  # Arma equipada visible en reposo; sprites completos al atacar.
-  var rest_sheet: Texture2D = ATTACK_SHEETS[weapon_index][0][direction_name]
-  draw_texture_rect_region(rest_sheet,Rect2(-32,-85+bob,64,96),Rect2(0,0,64,96),Color(1,1,1,0.92))
+  draw_texture_rect_region(attack_sheet,dest,Rect2(attack_frame*FRAME_W,0,FRAME_W,FRAME_H),tint)
+  return
+ # Quieto / caminando / corriendo: 4 fotogramas por dirección.
+ var fps := 2.4
+ if anim_state == "walk":
+  fps = 5.0 if crouched else 8.5
+ elif anim_state == "run":
+  fps = 11.0
+ var frame := int(floor(anim_time*fps))%4
+ var sheet: Texture2D = LOCO[anim_state][direction_name]
+ draw_texture_rect_region(sheet,dest,Rect2(frame*FRAME_W,0,FRAME_W,FRAME_H),tint)
+ draw_carried_weapon(direction_name,frame,tint)
+
+func draw_carried_weapon(direction_name: String, frame: int, tint: Color) -> void:
+ var info: Dictionary = CARRY[direction_name]
+ var pos: Vector2 = info["pos"]
+ var angle: float = info["gun"] if weapon_index==4 else info["angle"]
+ if frame%2==1:
+  if anim_state=="walk":
+   pos.y -= 1.0
+  elif anim_state=="run":
+   pos.y -= 3.0
+ if crouched:
+  pos.y += 3.0
+ var grip: Vector2 = WEAPON_GRIP[weapon_index]
+ draw_set_transform(pos,deg_to_rad(angle),Vector2(WEAPON_SCALE,WEAPON_SCALE))
+ draw_texture(WEAPON_ART[weapon_index],-grip,tint)
+ draw_set_transform(Vector2.ZERO,0.0,Vector2.ONE)

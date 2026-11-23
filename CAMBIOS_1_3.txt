@@ -1,0 +1,12 @@
+Alpha 1.3 - Protagonista basado en la lamina de diseno (referencia/protagonista_lamina.png)
+
+- El sprite del protagonista se recorto de las 12 poses de "Vista de arriba": quieto, caminando y corriendo en 4 direcciones (abajo, derecha, arriba, izquierda). Mismo pelo, cara, abrigo, camisa gris, pantalon y botas.
+- Nuevas hojas de animacion (4 fotogramas, 128x144 px):
+  pj_idle_*.png  respiracion
+  pj_walk_*.png  ciclo de caminata (zancada A, paso, zancada B, paso)
+  pj_run_*.png   ciclo de carrera con rebote
+  La segunda zancada de abajo/arriba es el espejo de la pose original; en izquierda/derecha se intercambian las piernas de la pose original.
+- Las 240 animaciones de ataque (5 armas x 4 direcciones x 2 intensidades x 6 fases) se regeneraron con el cuerpo nuevo (attack_*.png, 6 fotogramas de 128x144 px).
+- player.gd: animacion por estado (quieto/caminar/correr/agachado), arma equipada visible al llevarla, el golpe se aplica en el fotograma de impacto (fase 4 de 6; el disparo en la fase 3).
+- Sprites anteriores movidos a assets/_antiguos (ignorados por Godot).
+- No se ha podido ejecutar Godot en este entorno; si Godot senala un error, enviame la linea.
