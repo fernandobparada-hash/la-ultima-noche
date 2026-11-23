@@ -1,0 +1,1 @@
+Alpha 1.5: Errante y Rastrero usan ahora los sprites de sus laminas de personaje, con animaciones por fotogramas: idle (frente/lado/espalda), caminar, correr, ataque (Errante 4, Rastrero 6 con tajo), recibir dano y muerte (Errante 4, Rastrero 6). Izquierda = espejo de la derecha; arriba/abajo = poses de frente/espalda con balanceo. Sin ejecutar en Godot.

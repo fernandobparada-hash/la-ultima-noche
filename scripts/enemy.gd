@@ -14,7 +14,26 @@ var hit_flash := 0.0
 var attack_cooldown := 0.0
 var defeated := false
 var enemy_type := "Errante"
-const WALK = {"down": preload("res://assets/errante_concept_down.png"), "up": preload("res://assets/errante_concept_up.png"), "left": preload("res://assets/errante_concept_left.png"), "right": preload("res://assets/errante_concept_right.png")}
+# Hojas de animación (todas miran a la DERECHA; a la izquierda se espeja). Orden de "idle": frente, lado→, espalda, lado←.
+const ERR_IDLE: Texture2D = preload("res://assets/errante_anim_idle.png")
+const ERR_WALK: Texture2D = preload("res://assets/errante_anim_walk.png")
+const ERR_RUN: Texture2D = preload("res://assets/errante_anim_run.png")
+const ERR_ATTACK: Texture2D = preload("res://assets/errante_anim_attack.png")
+const ERR_HURTDEATH: Texture2D = preload("res://assets/errante_anim_hurtdeath.png")
+const RAS_IDLE: Texture2D = preload("res://assets/rastrero_anim_idle.png")
+const RAS_WALK: Texture2D = preload("res://assets/rastrero_anim_walk.png")
+const RAS_RUN: Texture2D = preload("res://assets/rastrero_anim_run.png")
+const RAS_ATTACK: Texture2D = preload("res://assets/rastrero_anim_attack.png")
+const RAS_HURT: Texture2D = preload("res://assets/rastrero_anim_hurt.png")
+const RAS_DEATH: Texture2D = preload("res://assets/rastrero_anim_death.png")
+const ERR_CELL := Vector2(80,96)
+const RAS_CELL := Vector2(104,72)
+const ERR_ATTACK_TIME := 0.56
+const RAS_ATTACK_TIME := 0.50
+var attack_anim := 0.0
+var hurt_anim := 0.0
+var death_time := 0.0
+var facing_side := 1.0
 var animation_time := 0.0
 var last_direction := Vector2.DOWN
 var stagger := 0.0
@@ -40,14 +59,25 @@ func change_type() -> void:
  suspicion = 0.0
  state = "PATRULLA"
  attack_cooldown = 0.6
+ attack_anim = 0.0
+ hurt_anim = 0.0
+ death_time = 0.0
+ windup = 0.0
+ stagger = 0.0
  queue_redraw()
 
 func _physics_process(delta: float) -> void:
- if defeated or target==null: return
+ if defeated:
+  death_time+=delta
+  if death_time<1.6: queue_redraw()
+  return
+ if target==null: return
  animation_time += delta*(3.1 if state=="PERSECUCION" else 1.6)
  hit_flash = maxf(0.0,hit_flash-delta)
  stagger = maxf(0.0,stagger-delta)
  attack_cooldown = maxf(0.0,attack_cooldown-delta)
+ attack_anim = maxf(0.0,attack_anim-delta)
+ hurt_anim = maxf(0.0,hurt_anim-delta)
  ai_tick -= delta
  var distance := global_position.distance_to(target.global_position)
  # Los rayos y el cálculo sensorial se actualizan a 10 Hz, no cada fotograma.
@@ -111,6 +141,7 @@ func _physics_process(delta: float) -> void:
   if distance<30.0 and state=="PERSECUCION" and attack_cooldown<=0.0:
    windup=0.42 if enemy_type=="Errante" else 0.28
    attack_cooldown=1.7 if enemy_type=="Errante" else 1.3
+   attack_anim=ERR_ATTACK_TIME if enemy_type=="Errante" else RAS_ATTACK_TIME
  if velocity.length()>3.0:
   last_direction=velocity.normalized()
  move_and_slide()
@@ -125,6 +156,9 @@ func receive_attack(origin: Vector2,direction: Vector2,reach: float,damage: floa
  if not get_world_2d().direct_space_state.intersect_ray(query).is_empty(): return false
  health=maxf(0.0,health-damage)
  hit_flash=0.20
+ hurt_anim=0.34
+ attack_anim=0.0
+ windup=0.0
  stagger=0.25 if enemy_type=="Errante" else 0.12
  suspicion=1.0
  last_seen=origin
@@ -132,6 +166,8 @@ func receive_attack(origin: Vector2,direction: Vector2,reach: float,damage: floa
  chase_cooldown=3.0
  if health<=0.0:
   defeated=true
+  death_time=0.0
+  hurt_anim=0.0
   velocity=Vector2.ZERO
   state="INACTIVO"
  queue_redraw()
@@ -142,34 +178,81 @@ func has_line_of_sight() -> bool:
  return get_world_2d().direct_space_state.intersect_ray(query).is_empty()
 
 func _draw() -> void:
- draw_ellipse_shadow()
+ var is_ras := enemy_type=="Rastrero"
+ var cs: Vector2 = RAS_CELL if is_ras else ERR_CELL
+ draw_ellipse_shadow(21.0 if is_ras else 14.0)
+ var tint := Color("e7c9b9") if hit_flash>0.0 else Color.WHITE
+ var tex: Texture2D = null
+ var frame := 0
+ var flip := false
+ var bob := 0.0
+ var sway := 0.0
  if defeated:
-  draw_rect(Rect2(-15,-4,30,8),Color("3b383d"))
-  return
- if enemy_type=="Rastrero":
-  # Enemigo de prueba dibujado por código: NO altera los sprites del usuario.
-  var twitch := roundf(sin(animation_time*6.0)*2.0)
-  var base := Color("c2b5a3") if hit_flash>0.0 else Color("5e6264")
-  draw_line(Vector2(-18,5),Vector2(-8,-11+twitch),Color("242b30"),6.0)
-  draw_line(Vector2(18,5),Vector2(8,-11-twitch),Color("242b30"),6.0)
-  draw_line(Vector2(-12,10),Vector2(-18,19),Color("333a3d"),6.0)
-  draw_line(Vector2(12,10),Vector2(18,19),Color("333a3d"),6.0)
-  draw_rect(Rect2(-14,-16,28,29),base)
-  draw_rect(Rect2(-10,-25,20,12),Color("777c7a") if hit_flash<=0.0 else Color("d9c1b5"))
-  draw_rect(Rect2(-8,-21,5,3),Color("d0b5a0"))
-  draw_rect(Rect2(3,-21,5,3),Color("d0b5a0"))
-  draw_line(Vector2(-9,5),Vector2(9,5),Color("252a2c"),3.0)
-  return
- var direction_name := "down"
- if absf(last_direction.x)>absf(last_direction.y):
-  direction_name="right" if last_direction.x>0.0 else "left"
- elif last_direction.y<0.0:
-  direction_name="up"
- var frame := int(animation_time*3.0)%4 if velocity.length()>5.0 else 1
- var color := Color("e7c9b9") if hit_flash>0.0 else Color.WHITE
- draw_texture_rect_region(WALK[direction_name],Rect2(-24,-62,48,72),Rect2(frame*48,0,48,72),color)
+  # Muerte: Errante usa los 4 cuadros de la hoja daño/muerte; Rastrero tiene 6 cuadros propios.
+  if is_ras:
+   tex=RAS_DEATH
+   frame=mini(5,int(death_time/0.15))
+  else:
+   tex=ERR_HURTDEATH
+   frame=mini(3,int(death_time/0.22))
+  flip=facing_side<0.0
+ elif attack_anim>0.0:
+  var total := RAS_ATTACK_TIME if is_ras else ERR_ATTACK_TIME
+  var progress := clampf(1.0-attack_anim/total,0.0,0.999)
+  if is_ras:
+   tex=RAS_ATTACK
+   frame=mini(5,int(progress*6.0))
+  else:
+   tex=ERR_ATTACK
+   frame=mini(3,int(progress*4.0))
+  var to_target := target.global_position-global_position if target!=null else last_direction
+  if absf(to_target.x)>4.0: facing_side=1.0 if to_target.x>0.0 else -1.0
+  flip=facing_side<0.0
+ elif hurt_anim>0.0:
+  var hp := clampf(1.0-hurt_anim/0.34,0.0,0.999)
+  if is_ras:
+   tex=RAS_HURT
+   frame=int([0,1,2,1][mini(3,int(hp*4.0))])
+  else:
+   tex=ERR_HURTDEATH
+   frame=mini(1,int(hp*2.0))
+  flip=facing_side<0.0
+ else:
+  var direction_name := "down"
+  if absf(last_direction.x)>absf(last_direction.y):
+   direction_name="right" if last_direction.x>0.0 else "left"
+  elif last_direction.y<0.0:
+   direction_name="up"
+  if absf(last_direction.x)>0.1: facing_side=1.0 if last_direction.x>0.0 else -1.0
+  var moving := velocity.length()>5.0
+  var running := state=="PERSECUCION"
+  var step := int(animation_time*3.0)%4
+  var idle_tex: Texture2D = RAS_IDLE if is_ras else ERR_IDLE
+  if direction_name=="left" or direction_name=="right":
+   if moving:
+    if is_ras: tex=RAS_RUN if running else RAS_WALK
+    else: tex=ERR_RUN if running else ERR_WALK
+    frame=step
+    flip=direction_name=="left"
+   else:
+    tex=idle_tex
+    frame=1 if direction_name=="right" else 3
+  else:
+   # Arriba/abajo: poses de frente y de espalda con balanceo de paso.
+   tex=idle_tex
+   frame=0 if direction_name=="down" else 2
+   if moving:
+    bob=-float(step%2)*(2.0 if running else 1.0)
+    sway=float([-1.0,0.0,1.0,0.0][step])*(2.0 if running else 1.0)
+ var dest := Rect2(roundf(-cs.x*0.5+sway),roundf(14.0-cs.y+bob),cs.x,cs.y)
+ if flip:
+  draw_set_transform(Vector2.ZERO,0.0,Vector2(-1,1))
+  dest.position.x=roundf(-cs.x*0.5-sway)
+ draw_texture_rect_region(tex,dest,Rect2(frame*cs.x,0,cs.x,cs.y),tint)
+ if flip: draw_set_transform(Vector2.ZERO,0.0,Vector2.ONE)
 
-func draw_ellipse_shadow() -> void:
+func draw_ellipse_shadow(radius: float = 14.0) -> void:
+ if defeated and death_time>0.5: radius*=1.15
  draw_set_transform(Vector2(0,11),0.0,Vector2(1.0,0.32))
- draw_circle(Vector2.ZERO,14.0,Color(0.03,0.04,0.05,0.40))
+ draw_circle(Vector2.ZERO,radius,Color(0.03,0.04,0.05,0.40))
  draw_set_transform(Vector2.ZERO)
