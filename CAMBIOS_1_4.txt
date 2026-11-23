@@ -1,0 +1,1 @@
+Alpha 1.4: mapa y objetos 55% mayores respecto del protagonista, sprites originales intactos; Rastrero alternable con T, IA con campo visual, oído, memoria, búsqueda, anticipación de ataque, esquiva Espacio, combo, inventario I y 1-5, botones táctiles. Sin ejecutar en Godot.

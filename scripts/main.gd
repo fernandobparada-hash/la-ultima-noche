@@ -22,10 +22,16 @@ var door_open := false
 var door_body: StaticBody2D
 var game_over := false
 var world_time := 0.0
+var redraw_accum := 0.0
 var lamps: Array[PointLight2D] = []
 var mobile_controls: NightMobileControls
 var death_panel: ColorRect
 var death_label: Label
+var inventory_panel: PanelContainer
+var inventory_label: Label
+var inventory_open := false
+var inventory_items: Array[String] = ["Linterna", "Carta arrugada"]
+const WORLD_SCALE := 1.55
 
 const WALLS := [
  Rect2(0,0,1000,16),Rect2(0,600,1000,16),Rect2(0,0,16,616),Rect2(984,0,16,616),
@@ -41,10 +47,13 @@ const FURNITURE := [
 
 func _ready() -> void:
  RenderingServer.set_default_clear_color(Color("10161b"))
+ scale=Vector2.ONE*WORLD_SCALE
  build_world()
  player = PlayerScript.new()
  player.position = Vector2(170,130)
  add_child(player)
+ player.scale=Vector2.ONE/WORLD_SCALE
+ player.get_node("Camera2D").zoom=Vector2(0.9,0.9)
  player.attacked.connect(_on_player_attack)
  player.hurt.connect(_on_player_hurt)
  enemy = EnemyScript.new()
@@ -52,12 +61,15 @@ func _ready() -> void:
  enemy.points = [Vector2(570,425),Vector2(850,425),Vector2(850,540),Vector2(570,540)]
  enemy.target = player
  add_child(enemy)
+ enemy.scale=Vector2.ONE/WORLD_SCALE
  build_lighting()
  var fog := FogScript.new()
  add_child(fog)
  build_hud()
  mobile_controls = MobileControlsScript.new()
  add_child(mobile_controls)
+ # CanvasLayer mantiene HUD y controles a escala de pantalla.
+
  mobile_controls.respawn_requested.connect(respawn_player)
  player.mobile_input = mobile_controls
  show_message("Despiertas en una casa desconocida. Busca respuestas.",5.0)
@@ -149,6 +161,26 @@ func build_hud() -> void:
  death_label.add_theme_font_size_override("font_size",32)
  death_label.add_theme_color_override("font_color",Color("e5d4b9"))
  death_panel.add_child(death_label)
+ inventory_panel=PanelContainer.new()
+ inventory_panel.position=Vector2(210,95)
+ inventory_panel.custom_minimum_size=Vector2(540,340)
+ inventory_panel.visible=false
+ canvas.add_child(inventory_panel)
+ inventory_label=Label.new()
+ inventory_label.add_theme_font_size_override("font_size",19)
+ inventory_label.add_theme_color_override("font_color",Color("e8ddc9"))
+ inventory_panel.add_child(inventory_label)
+ refresh_inventory()
+
+func refresh_inventory() -> void:
+ if inventory_label==null: return
+ var text := "INVENTARIO  /  I para cerrar\n\n"
+ for i in range(player.weapons.size()):
+  text += ("► " if i==player.weapon_index else "  ")+str(i+1)+". "+player.weapons[i]+"\n"
+ text += "\nOBJETOS\n"
+ for item in inventory_items:
+  text += "• "+item+"\n"
+ inventory_label.text=text
 
 func respawn_player() -> void:
  if game_over:
@@ -156,6 +188,19 @@ func respawn_player() -> void:
 
 func _process(delta: float) -> void:
  world_time+=delta
+ if Input.is_action_just_pressed("inventory") and not game_over:
+  inventory_open=not inventory_open
+  inventory_panel.visible=inventory_open
+  refresh_inventory()
+ if Input.is_action_just_pressed("change_enemy") and not game_over:
+  enemy.change_type()
+  show_message("Enemigo de prueba: "+enemy.enemy_type,3.0)
+ if inventory_open:
+  for i in range(5):
+   if Input.is_key_pressed(KEY_1+i):
+    player.weapon_index=i
+    refresh_inventory()
+  player.velocity=Vector2.ZERO
  message_time-=delta
  if message_time<=0.0: notice.text=""
  if not knocks_triggered and player.position.y>230.0:
@@ -174,20 +219,23 @@ func _process(delta: float) -> void:
   respawn_player()
  var status := "INACTIVO" if enemy.defeated else enemy.state
  ui.text="LA ÚLTIMA NOCHE   /   CAPÍTULO CERO\nVIDA %d   ·   ENERGÍA %d   ·   %s   ·   LINTERNA %s" % [int(player.health),int(player.stamina),(player.weapons[player.weapon_index]+(" · ∞" if player.weapons[player.weapon_index]=="Pistola" else "")),"ENCENDIDA" if player.light_on else "APAGADA"]
- objective.text="OBJETIVO  /  %s" % ["Explora la calle y evita al Errante" if found_exit else ("Abre la puerta de salida" if took_key else "Busca la llave en la cocina")]
+ objective.text="[I] INVENTARIO   [ESPACIO] ESQUIVAR   [T] CAMBIAR ENEMIGO  /  %s" % ["Explora la calle y evita al Errante" if found_exit else ("Abre la puerta de salida" if took_key else "Busca la llave en la cocina")]
  if player.position.x>500.0 and player.position.y>355.0 and not found_exit:
   found_exit=true
   show_message("Has salido al barrio residencial. El Errante patrulla la calle.",5.0)
  for i in range(lamps.size()):
   lamps[i].energy=(0.65 if i<2 else 0.85)*(0.94+0.06*sin(world_time*2.1+float(i)*3.0))
- queue_redraw()
+ redraw_accum += delta
+ if redraw_accum>=0.05:
+  redraw_accum=0.0
+  queue_redraw()
 
 func _on_player_attack(origin: Vector2,direction: Vector2,reach: float,damage: float) -> void:
  if enemy.receive_attack(origin,direction,reach,damage):
   if enemy.defeated:
-   show_message("El Errante ha quedado fuera de combate. Puedes continuar explorando.",4.0)
+   show_message(enemy.enemy_type+" fuera de combate.",3.0)
   else:
-   show_message("El Errante retrocede, pero sigue siendo peligroso.",1.3)
+   show_message(enemy.enemy_type+" retrocede.",1.0)
 
 func _on_player_hurt(_amount: float) -> void:
  show_message("El Errante te ha alcanzado. Aléjate o utiliza una cobertura.",2.0)
@@ -195,15 +243,22 @@ func _on_player_hurt(_amount: float) -> void:
 func interact() -> void:
  if player.position.distance_to(Vector2(190,155))<40.0:
   read_letter=true
+  if not inventory_items.has("Carta encontrada"):
+   inventory_items.append("Carta encontrada")
+  refresh_inventory()
   show_message("Carta: 'Para ti. Cuando despiertes. No confíes en todo lo que encuentres.'",8.0)
  elif player.position.distance_to(Vector2(365,290))<43.0 and not took_key:
   took_key=true
+  inventory_items.append("Llave antigua")
+  refresh_inventory()
   show_message("Has encontrado una llave antigua. Ahora puedes abrir la puerta principal.",4.0)
  elif player.position.distance_to(Vector2(237,345))<55.0 and not door_open:
   if not took_key:
    show_message("La puerta está cerrada. Quizá haya una llave en la cocina.",4.0)
   else:
    door_open=true
+   inventory_items.erase("Llave antigua")
+   refresh_inventory()
    door_body.collision_layer=0
    show_message("La cerradura cede. La calle está sumida en la niebla.",4.0)
  else:

@@ -36,6 +36,9 @@ func build_controls() -> void:
  add_touch("attack_light", "GOLPE", Vector2(824,450), 13)
  add_touch("attack_heavy", "FUERTE", Vector2(826,240), 13)
  add_touch("switch_weapon", "ARMA", Vector2(720,345), 14)
+ add_touch("dodge", "ESQUIVAR", Vector2(604,450), 12)
+ add_touch("inventory", "BOLSA", Vector2(605,345), 13)
+ add_touch("change_enemy", "ENEMIGO", Vector2(600,240), 11)
  respawn = Button.new()
  respawn.text = "REAPARECER"
  respawn.position = Vector2(350,315)

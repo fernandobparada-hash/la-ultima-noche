@@ -77,6 +77,13 @@ var idle_time := 0.0
 var shot_flash := 0.0
 var shots_fired := 0
 var mobile_input: NightMobileControls
+var dodge_timer := 0.0
+var dodge_cooldown := 0.0
+var dodge_direction := Vector2.DOWN
+var combo_step := 0
+var combo_window := 0.0
+var hit_stop := 0.0
+
 
 func _ready() -> void:
  collision_layer = 1
@@ -90,6 +97,7 @@ func _ready() -> void:
  camera.enabled = true
  camera.position_smoothing_enabled = false
  camera.position_smoothing_speed = 7.0
+ camera.name = "Camera2D"
  add_child(camera)
  light = PointLight2D.new()
  light.texture = make_light_texture()
@@ -114,6 +122,9 @@ func _physics_process(delta: float) -> void:
  idle_time += delta
  shot_flash = maxf(0.0,shot_flash-delta)
  attack_timer = maxf(0.0,attack_timer-delta)
+ dodge_timer = maxf(0.0,dodge_timer-delta)
+ dodge_cooldown = maxf(0.0,dodge_cooldown-delta)
+ combo_window = maxf(0.0,combo_window-delta)
  if attack_duration>0.0 and not attack_damage_done:
   var progress := 1.0-attack_timer/attack_duration
   if progress >= (0.34 if weapons[weapon_index]=="Pistola" else 0.5):
@@ -125,9 +136,11 @@ func _physics_process(delta: float) -> void:
  if mobile_input != null and mobile_input.is_mobile and mobile_input.joystick_vector.length() > 0.05:
   direction = mobile_input.joystick_vector
  crouched = Input.is_action_pressed("crouch")
+ if Input.is_action_just_pressed("dodge"):
+  do_dodge(direction)
  var running := Input.is_action_pressed("run") and not crouched and stamina>1.0 and direction.length()>0.0
  var speed := 62.0 if crouched else (158.0 if running else 103.0)
- velocity = direction*speed
+ velocity = dodge_direction*310.0 if dodge_timer>0.0 else direction*speed
  run_state = running
  move_and_slide()
  if direction.length()>0.1:
@@ -139,7 +152,7 @@ func _physics_process(delta: float) -> void:
   stamina = minf(100.0,stamina+(15.0 if direction.length()<0.1 else 10.0)*delta)
  if Input.is_action_just_pressed("flashlight"):
   light_on = not light_on
- if Input.is_action_just_pressed("switch_weapon"):
+ if Input.is_action_just_pressed("switch_weapon") and attack_timer<=0.0:
   weapon_index = (weapon_index+1)%weapons.size()
  if Input.is_action_just_pressed("attack_light"):
   do_attack(false)
@@ -157,20 +170,34 @@ func _physics_process(delta: float) -> void:
  cone.rotation = facing.angle()
  queue_redraw()
 
+func do_dodge(direction: Vector2) -> void:
+ if dodge_timer>0.0 or dodge_cooldown>0.0 or stamina<22.0 or health<=0.0: return
+ if attack_timer>0.0: return
+ dodge_direction = direction.normalized() if direction.length()>0.15 else facing
+ dodge_timer = 0.23
+ dodge_cooldown = 0.70
+ invulnerable = maxf(invulnerable,0.32)
+ stamina -= 22.0
+
 func do_attack(heavy: bool) -> void:
  if attack_timer>0.0 or health<=0.0: return
  var is_pistol: bool = weapons[weapon_index]=="Pistola"
  var cost := 0.0 if is_pistol else (28.0 if heavy else 12.0)
  if stamina<cost: return
  stamina -= cost
- attack_timer = (0.40 if heavy else 0.24) if is_pistol else (0.72 if heavy else 0.36)
+ if not heavy and not is_pistol:
+  combo_step = (combo_step+1)%3 if combo_window>0.0 else 0
+  combo_window = 0.78
+ else:
+  combo_step = 0
+ attack_timer = (0.40 if heavy else 0.24) if is_pistol else (0.72 if heavy else (0.32 if combo_step==2 else 0.36))
  attack_duration = attack_timer
  attack_heavy = heavy
  attack_facing = facing
  attack_damage_done = false
  attack_flash = 0.20
  var reach := 48.0 if weapon_index==1 else (46.0 if weapon_index>=2 else 38.0)
- var damage := (32.0 if heavy else 18.0)*(1.3 if weapon_index==1 else (1.15 if weapon_index>=2 else 1.0))
+ var damage := (32.0 if heavy else (22.0 if combo_step==2 else 18.0))*(1.3 if weapon_index==1 else (1.15 if weapon_index>=2 else 1.0))
  if is_pistol:
   reach = 245.0
   damage = 28.0
@@ -180,7 +207,7 @@ func do_attack(heavy: bool) -> void:
  attack_damage = damage
 
 func take_hit(amount: float) -> void:
- if invulnerable>0.0 or health<=0.0: return
+ if invulnerable>0.0 or dodge_timer>0.0 or health<=0.0: return
  health = maxf(0.0,health-amount)
  invulnerable = 1.1
  hurt.emit(amount)

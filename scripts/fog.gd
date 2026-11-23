@@ -1,11 +1,15 @@
 extends Node2D
 class_name NightFog
 var elapsed := 0.0
+var redraw_accum := 0.0
 func _ready() -> void:
  z_index = 9
 func _process(delta: float) -> void:
  elapsed += delta
- queue_redraw()
+ redraw_accum += delta
+ if redraw_accum >= 0.066:
+  redraw_accum = 0.0
+  queue_redraw()
 func _draw() -> void:
  # Niebla más densa en la calle; no tapa por completo la silueta del Errante.
  for band in range(11):
