@@ -1,0 +1,1 @@
+Alpha 0.9: sprite completo del protagonista dibujado manualmente en cuadrícula 32x48, 4 direcciones, 4 cuadros cada una; contorno y transparencia limpios, cuerpo completo y abrigo largo. Se reemplazan los recortes de la imagen conceptual que provocaban cabeza flotante. Se mantienen las demás funciones. Requiere prueba en Godot.

@@ -1,0 +1,1 @@
+Alpha 1.2: 240 fotogramas completos de ataque: 5 armas × 4 direcciones × 2 intensidades × 6 fases. Cada fotograma combina cuerpo, abrigo, brazo y arma, con anticipación, golpe y recuperación. Armas infinitas y controles anteriores conservados. No ejecutado en Godot.

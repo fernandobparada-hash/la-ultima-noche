@@ -1,0 +1,1 @@
+Alpha 1.1: brazos pixel art independientes, 4 orientaciones, 3 poses por orientación; brazo por delante del arma para simular agarre; pivote de arma vinculado al hombro, preparación, impacto y recuperación. Mantiene controles y cinco armas. No probado en Godot.

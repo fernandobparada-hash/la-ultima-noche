@@ -1,0 +1,1 @@
+Alpha 1.0: cinco sprites pixel art originales de armas, siluetas y detalles diferenciados; armas orientadas en función de la dirección del personaje; giro con preparación y recuperación; destello para pistola; se mantienen cinco armas, joystick, niebla y personaje. Requiere prueba en Godot 4.
