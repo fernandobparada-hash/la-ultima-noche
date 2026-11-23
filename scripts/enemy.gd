@@ -42,6 +42,16 @@ var roam_offset := Vector2.ZERO
 var ai_tick := 0.0
 var can_see := false
 var can_hear := false
+var noise_location := Vector2.ZERO
+var noise_memory := 0.0
+var alertness := 0.0
+var flank_offset := Vector2.ZERO
+var flank_timer := 0.0
+var attack_committed := false
+var separation := Vector2.ZERO
+var blocked_timer := 0.0
+var previous_position := Vector2.ZERO
+
 
 func _ready() -> void:
  collision_layer = 4
@@ -59,6 +69,10 @@ func change_type() -> void:
  suspicion = 0.0
  state = "PATRULLA"
  attack_cooldown = 0.6
+ noise_memory=0.0
+ alertness=0.0
+ flank_timer=0.0
+ attack_committed=false
  attack_anim = 0.0
  hurt_anim = 0.0
  death_time = 0.0
@@ -76,6 +90,9 @@ func _physics_process(delta: float) -> void:
  hit_flash = maxf(0.0,hit_flash-delta)
  stagger = maxf(0.0,stagger-delta)
  attack_cooldown = maxf(0.0,attack_cooldown-delta)
+ noise_memory = maxf(0.0,noise_memory-delta)
+ flank_timer = maxf(0.0,flank_timer-delta)
+ alertness = maxf(0.0,alertness-delta*0.08)
  attack_anim = maxf(0.0,attack_anim-delta)
  hurt_anim = maxf(0.0,hurt_anim-delta)
  ai_tick -= delta
@@ -85,16 +102,23 @@ func _physics_process(delta: float) -> void:
   ai_tick=0.10
   var hearing := 45.0 if target.crouched else (180.0 if target.run_state else 105.0)
   can_hear = distance<hearing and target.velocity.length()>15.0
+  if can_hear:
+   noise_location=target.global_position
+   noise_memory=2.6
+   alertness=minf(1.0,alertness+0.22)
   var sight_range := (155.0 if target.light_on else 100.0) * (0.85 if enemy_type=="Rastrero" else 1.0)
   var toward := (target.global_position-global_position).normalized()
   var in_cone := last_direction.dot(toward)>-0.25 or distance<35.0
   can_see = distance<sight_range and in_cone and has_line_of_sight()
  if can_see:
-  suspicion = minf(1.0,suspicion+delta*2.1)
+  suspicion = minf(1.0,suspicion+delta*(2.0+alertness))
   last_seen = target.global_position
  elif can_hear:
-  suspicion = minf(1.0,suspicion+delta*0.85)
-  last_seen = target.global_position
+  suspicion = minf(1.0,suspicion+delta*(0.65+alertness*0.3))
+  last_seen = noise_location
+ elif noise_memory>0.0 and state=="PATRULLA":
+  state="SOSPECHA"
+  last_seen=noise_location
  else:
   suspicion = maxf(0.0,suspicion-delta*0.19)
  if suspicion>=0.85:
@@ -124,6 +148,13 @@ func _physics_process(delta: float) -> void:
  elif state=="PERSECUCION":
   destination=last_seen
   speed=90.0 if enemy_type=="Errante" else 128.0
+  # El Rastrero busca un ángulo lateral y cambia de flanco periódicamente.
+  if enemy_type=="Rastrero" and distance>45.0 and can_see:
+   if flank_timer<=0.0:
+    var lateral := Vector2(-last_direction.y,last_direction.x)
+    flank_offset=lateral*randf_range(-38.0,38.0)
+    flank_timer=1.8
+   destination+=flank_offset
  elif state=="SOSPECHA" or state=="BUSQUEDA":
   destination=last_seen+roam_offset
   speed=55.0 if enemy_type=="Errante" else 78.0
@@ -132,19 +163,36 @@ func _physics_process(delta: float) -> void:
  if windup>0.0:
   windup-=delta
   velocity=Vector2.ZERO
-  if windup<=0.0 and distance<35.0 and has_line_of_sight():
-   target.take_hit(10.0 if enemy_type=="Errante" else 16.0)
+  if windup<=0.0 and attack_committed:
+   attack_committed=false
+   # Ataque direccional: esquivar hacia un lado puede evitar el impacto.
+   var to_player := target.global_position-global_position
+   var reach := 37.0 if enemy_type=="Errante" else 42.0
+   if to_player.length()<reach and last_direction.dot(to_player.normalized())>0.2 and has_line_of_sight():
+    target.take_hit(10.0 if enemy_type=="Errante" else 16.0)
  elif stagger>0.0:
   velocity=Vector2.ZERO
  else:
   velocity=global_position.direction_to(destination)*speed if global_position.distance_to(destination)>9.0 else Vector2.ZERO
   if distance<30.0 and state=="PERSECUCION" and attack_cooldown<=0.0:
    windup=0.42 if enemy_type=="Errante" else 0.28
+   attack_committed=true
+   last_direction=global_position.direction_to(target.global_position)
    attack_cooldown=1.7 if enemy_type=="Errante" else 1.3
    attack_anim=ERR_ATTACK_TIME if enemy_type=="Errante" else RAS_ATTACK_TIME
  if velocity.length()>3.0:
   last_direction=velocity.normalized()
+ # Recuperación si queda atascado contra un obstáculo.
+ previous_position=global_position
  move_and_slide()
+ if velocity.length()>20.0 and global_position.distance_to(previous_position)<0.4:
+  blocked_timer+=delta
+  if blocked_timer>0.65:
+   roam_offset=Vector2(randf_range(-55.0,55.0),randf_range(-55.0,55.0))
+   if state=="PERSECUCION": flank_offset=roam_offset
+   blocked_timer=0.0
+ else:
+  blocked_timer=0.0
  queue_redraw()
 
 func receive_attack(origin: Vector2,direction: Vector2,reach: float,damage: float) -> bool:
@@ -159,6 +207,7 @@ func receive_attack(origin: Vector2,direction: Vector2,reach: float,damage: floa
  hurt_anim=0.34
  attack_anim=0.0
  windup=0.0
+ attack_committed=false
  stagger=0.25 if enemy_type=="Errante" else 0.12
  suspicion=1.0
  last_seen=origin
@@ -172,6 +221,17 @@ func receive_attack(origin: Vector2,direction: Vector2,reach: float,damage: floa
   state="INACTIVO"
  queue_redraw()
  return true
+
+func hear_event(location: Vector2, loudness: float) -> void:
+ if defeated: return
+ var distance := global_position.distance_to(location)
+ if distance>loudness: return
+ noise_location=location
+ last_seen=location
+ noise_memory=3.0
+ suspicion=maxf(suspicion,0.55)
+ alertness=minf(1.0,alertness+0.4)
+ if state!="PERSECUCION": state="SOSPECHA"
 
 func has_line_of_sight() -> bool:
  var query := PhysicsRayQueryParameters2D.create(global_position,target.global_position,2)

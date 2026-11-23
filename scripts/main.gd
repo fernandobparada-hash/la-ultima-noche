@@ -30,7 +30,16 @@ var death_label: Label
 var inventory_panel: PanelContainer
 var inventory_label: Label
 var inventory_open := false
-var inventory_items: Array[String] = ["Linterna", "Carta arrugada"]
+var inventory_items: Array[String] = ["Linterna", "Carta arrugada", "Botiquín"]
+var inventory_selection := 0
+var inventory_description: Label
+var inventory_list: ItemList
+var inventory_use_button: Button
+var tracer_start := Vector2.ZERO
+var tracer_end := Vector2.ZERO
+var tracer_lifetime := 0.0
+var shot_impact := false
+
 const WORLD_SCALE := 1.55
 
 const WALLS := [
@@ -55,6 +64,7 @@ func _ready() -> void:
  player.scale=Vector2.ONE/WORLD_SCALE
  player.get_node("Camera2D").zoom=Vector2(0.9,0.9)
  player.attacked.connect(_on_player_attack)
+ player.gun_fired.connect(_on_gun_fired)
  player.hurt.connect(_on_player_hurt)
  enemy = EnemyScript.new()
  enemy.position = Vector2(570,425)
@@ -162,25 +172,97 @@ func build_hud() -> void:
  death_label.add_theme_color_override("font_color",Color("e5d4b9"))
  death_panel.add_child(death_label)
  inventory_panel=PanelContainer.new()
- inventory_panel.position=Vector2(210,95)
- inventory_panel.custom_minimum_size=Vector2(540,340)
+ inventory_panel.position=Vector2(170,82)
+ inventory_panel.custom_minimum_size=Vector2(620,385)
  inventory_panel.visible=false
  canvas.add_child(inventory_panel)
- inventory_label=Label.new()
- inventory_label.add_theme_font_size_override("font_size",19)
- inventory_label.add_theme_color_override("font_color",Color("e8ddc9"))
- inventory_panel.add_child(inventory_label)
+ var backing := VBoxContainer.new()
+ backing.add_theme_constant_override("separation",9)
+ inventory_panel.add_child(backing)
+ var heading := Label.new()
+ heading.text="MOCHILA   ·   I para cerrar"
+ heading.add_theme_font_size_override("font_size",22)
+ backing.add_child(heading)
+ var columns := HBoxContainer.new()
+ backing.add_child(columns)
+ inventory_list=ItemList.new()
+ inventory_list.custom_minimum_size=Vector2(270,255)
+ inventory_list.item_selected.connect(_on_inventory_selected)
+ columns.add_child(inventory_list)
+ var detail := VBoxContainer.new()
+ detail.custom_minimum_size=Vector2(295,250)
+ columns.add_child(detail)
+ inventory_description=Label.new()
+ inventory_description.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
+ inventory_description.custom_minimum_size=Vector2(285,160)
+ detail.add_child(inventory_description)
+ inventory_use_button=Button.new()
+ inventory_use_button.text="USAR / EQUIPAR"
+ inventory_use_button.pressed.connect(use_inventory_selection)
+ detail.add_child(inventory_use_button)
+ var hint := Label.new()
+ hint.text="Armas: 1–5   ·   Botiquín: selecciónalo y pulsa USAR"
+ hint.add_theme_font_size_override("font_size",13)
+ backing.add_child(hint)
  refresh_inventory()
 
-func refresh_inventory() -> void:
- if inventory_label==null: return
- var text := "INVENTARIO  /  I para cerrar\n\n"
- for i in range(player.weapons.size()):
-  text += ("► " if i==player.weapon_index else "  ")+str(i+1)+". "+player.weapons[i]+"\n"
- text += "\nOBJETOS\n"
+func _on_inventory_selected(index: int) -> void:
+ inventory_selection=index
+ refresh_inventory()
+
+func inventory_entries() -> Array[String]:
+ var result: Array[String] = []
+ for weapon in player.weapons:
+  result.append(weapon)
  for item in inventory_items:
-  text += "• "+item+"\n"
- inventory_label.text=text
+  result.append(item)
+ return result
+
+func refresh_inventory() -> void:
+ if inventory_list==null: return
+ var entries := inventory_entries()
+ inventory_selection=clampi(inventory_selection,0,maxi(0,entries.size()-1))
+ inventory_list.clear()
+ for i in range(entries.size()):
+  var prefix := "● " if i==player.weapon_index and i<player.weapons.size() else "   "
+  inventory_list.add_item(prefix+entries[i])
+ if not entries.is_empty():
+  inventory_list.select(inventory_selection)
+  var selected := entries[inventory_selection]
+  var descriptions := {
+   "Palo":"Arma improvisada. Ligera, rápida y de corto alcance.",
+   "Barra":"Golpes contundentes y mayor alcance.",
+   "Tubo":"Equilibrio entre alcance, velocidad y fuerza.",
+   "Llave inglesa":"Herramienta pesada, útil en combate cercano.",
+   "Pistola":"Arma a distancia. Munición infinita en esta versión. La trayectoria se detiene en paredes.",
+   "Linterna":"Ilumina las zonas oscuras, pero también puede delatarte.",
+   "Carta arrugada":"Una carta que estaba contigo al despertar.",
+   "Carta encontrada":"Un mensaje misterioso encontrado en la casa.",
+   "Llave antigua":"Abre la puerta principal de la casa.",
+   "Botiquín":"Recupera 35 puntos de vida. Se consume al usarlo."
+  }
+  inventory_description.text=selected+"\n\n"+str(descriptions.get(selected,"Objeto de investigación."))
+  inventory_use_button.disabled=selected in ["Carta arrugada","Carta encontrada","Llave antigua"]
+ else:
+  inventory_description.text="La mochila está vacía."
+
+func use_inventory_selection() -> void:
+ var entries := inventory_entries()
+ if inventory_selection>=entries.size(): return
+ var item := entries[inventory_selection]
+ if inventory_selection<player.weapons.size():
+  player.select_weapon(inventory_selection)
+  show_message("Equipaste "+item+".",1.4)
+ elif item=="Botiquín":
+  if player.health>=100.0:
+   show_message("Ya tienes la vida completa.",1.5)
+   return
+  player.health=minf(100.0,player.health+35.0)
+  inventory_items.erase("Botiquín")
+  show_message("Usaste un botiquín. +35 de vida.",2.0)
+ elif item=="Linterna":
+  player.light_on=not player.light_on
+ refresh_inventory()
 
 func respawn_player() -> void:
  if game_over:
@@ -188,9 +270,11 @@ func respawn_player() -> void:
 
 func _process(delta: float) -> void:
  world_time+=delta
+ tracer_lifetime=maxf(0.0,tracer_lifetime-delta)
  if Input.is_action_just_pressed("inventory") and not game_over:
   inventory_open=not inventory_open
   inventory_panel.visible=inventory_open
+  player.inventory_locked=inventory_open
   refresh_inventory()
  if Input.is_action_just_pressed("change_enemy") and not game_over:
   enemy.change_type()
@@ -198,7 +282,7 @@ func _process(delta: float) -> void:
  if inventory_open:
   for i in range(5):
    if Input.is_key_pressed(KEY_1+i):
-    player.weapon_index=i
+    player.select_weapon(i)
     refresh_inventory()
   player.velocity=Vector2.ZERO
  message_time-=delta
@@ -210,6 +294,8 @@ func _process(delta: float) -> void:
   interact()
  if player.health<=0.0 and not game_over:
   game_over=true
+  inventory_open=false
+  inventory_panel.visible=false
   player.set_physics_process(false)
   enemy.set_physics_process(false)
   mobile_controls.set_dead(true)
@@ -231,11 +317,31 @@ func _process(delta: float) -> void:
   queue_redraw()
 
 func _on_player_attack(origin: Vector2,direction: Vector2,reach: float,damage: float) -> void:
+ enemy.hear_event(origin,125.0)
  if enemy.receive_attack(origin,direction,reach,damage):
   if enemy.defeated:
    show_message(enemy.enemy_type+" fuera de combate.",3.0)
   else:
    show_message(enemy.enemy_type+" retrocede.",1.0)
+
+func _on_gun_fired(origin: Vector2, destination: Vector2, damage: float) -> void:
+ # Hitscan: el primer cuerpo sólido (pared o enemigo) detiene el disparo.
+ var params := PhysicsRayQueryParameters2D.create(origin,destination,6,[player.get_rid()])
+ var hit := get_world_2d().direct_space_state.intersect_ray(params)
+ tracer_start=origin
+ tracer_end=destination
+ shot_impact=false
+ if not hit.is_empty():
+  tracer_end=hit["position"]
+  shot_impact=true
+  var collider: Object=hit["collider"]
+  if collider is NightEnemy:
+   var foe := collider as NightEnemy
+   if foe.receive_attack(origin,(tracer_end-origin).normalized(),origin.distance_to(tracer_end)+4.0,damage):
+    show_message(foe.enemy_type+" recibió el disparo.",1.0)
+ tracer_lifetime=0.13
+ enemy.hear_event(origin,380.0)
+ queue_redraw()
 
 func _on_player_hurt(_amount: float) -> void:
  show_message("El Errante te ha alcanzado. Aléjate o utiliza una cobertura.",2.0)
@@ -358,3 +464,9 @@ func _draw() -> void:
   var px := 490.0+fmod(float(i*107)+world_time*7.0,470.0)
   var py := 400.0+float(i*27)
   draw_arc(Vector2(px,py),22.0,0.3,2.7,12,Color(0.71,0.77,0.75,0.075),2.0)
+ if tracer_lifetime>0.0:
+  var alpha := tracer_lifetime/0.13
+  draw_line(tracer_start,tracer_end,Color(1.0,0.91,0.63,alpha),2.0,true)
+  draw_line(tracer_start,tracer_end,Color(1.0,0.68,0.24,alpha*0.6),5.0,true)
+  if shot_impact:
+   draw_circle(tracer_end,4.0*alpha,Color(1.0,0.85,0.6,alpha))

@@ -1,0 +1,27 @@
+LA ÚLTIMA NOCHE - ALPHA 1.6
+Base: ZIP del usuario Alpha 1.5 (animaciones de enemigos), conservadas sin modificar.
+
+IA
+- Memoria de ruido y alerta persistente.
+- El Rastrero cambia de flanco durante la persecución.
+- Recuperación cuando un enemigo queda bloqueado por un obstáculo.
+- Ataques direccionales con preparación: la esquiva lateral puede evitar daño.
+- Los golpes y disparos alertan a enemigos cercanos.
+
+COMBATE
+- Pistola con retroceso, destello, trayectoria visible y colisión contra paredes y enemigos.
+- El daño de la pistola se aplica al primer enemigo alcanzado por el rayo.
+- Cinco armas preservadas, combo y ataques pesados.
+- Transición al equipar y ajuste de la posición del arma en reposo.
+- Los sprites y las animaciones creados por el usuario permanecen intactos.
+
+INVENTARIO
+- Interfaz seleccionable con armas y objetos, descripciones y botón usar/equipar.
+- Botiquín consumible que cura 35 puntos.
+- Linterna activable desde inventario.
+- Selección de arma con teclas 1-5.
+- Se bloquea el movimiento y el combate al abrir la mochila.
+
+CONTROLES
+WASD movimiento, J/K ataques, Q cambiar arma, ESPACIO esquivar, I mochila, T enemigo, F linterna.
+Requiere Godot 4.2+. ZIP revisado; no se ha podido probar ejecución en Godot.

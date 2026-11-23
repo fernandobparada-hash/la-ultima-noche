@@ -3,6 +3,7 @@ class_name NightPlayer
 
 signal attacked(origin: Vector2, direction: Vector2, reach: float, damage: float)
 signal hurt(amount: float)
+signal gun_fired(origin: Vector2, destination: Vector2, damage: float)
 
 var stamina := 100.0
 var health := 100.0
@@ -83,6 +84,13 @@ var dodge_direction := Vector2.DOWN
 var combo_step := 0
 var combo_window := 0.0
 var hit_stop := 0.0
+var attack_queued := false
+var recoil := 0.0
+var equip_blend := 0.0
+var last_weapon := 0
+var inventory_locked := false
+var gun_range := 430.0
+
 
 
 func _ready() -> void:
@@ -121,6 +129,8 @@ func make_light_texture() -> Texture2D:
 func _physics_process(delta: float) -> void:
  idle_time += delta
  shot_flash = maxf(0.0,shot_flash-delta)
+ recoil = maxf(0.0,recoil-delta*5.0)
+ equip_blend = maxf(0.0,equip_blend-delta*3.0)
  attack_timer = maxf(0.0,attack_timer-delta)
  dodge_timer = maxf(0.0,dodge_timer-delta)
  dodge_cooldown = maxf(0.0,dodge_cooldown-delta)
@@ -128,7 +138,11 @@ func _physics_process(delta: float) -> void:
  if attack_duration>0.0 and not attack_damage_done:
   var progress := 1.0-attack_timer/attack_duration
   if progress >= (0.34 if weapons[weapon_index]=="Pistola" else 0.5):
-   attacked.emit(global_position,attack_facing,attack_reach,attack_damage)
+   if weapon_index==4:
+    var muzzle := global_position+attack_facing.normalized()*24.0
+    gun_fired.emit(muzzle,muzzle+attack_facing.normalized()*gun_range,attack_damage)
+   else:
+    attacked.emit(global_position,attack_facing,attack_reach,attack_damage)
    attack_damage_done=true
  attack_flash = maxf(0.0,attack_flash-delta)
  invulnerable = maxf(0.0,invulnerable-delta)
@@ -136,11 +150,11 @@ func _physics_process(delta: float) -> void:
  if mobile_input != null and mobile_input.is_mobile and mobile_input.joystick_vector.length() > 0.05:
   direction = mobile_input.joystick_vector
  crouched = Input.is_action_pressed("crouch")
- if Input.is_action_just_pressed("dodge"):
+ if Input.is_action_just_pressed("dodge") and not inventory_locked:
   do_dodge(direction)
  var running := Input.is_action_pressed("run") and not crouched and stamina>1.0 and direction.length()>0.0
  var speed := 62.0 if crouched else (158.0 if running else 103.0)
- velocity = dodge_direction*310.0 if dodge_timer>0.0 else direction*speed
+ velocity = (dodge_direction*310.0 if dodge_timer>0.0 else direction*speed) if not inventory_locked else Vector2.ZERO
  run_state = running
  move_and_slide()
  if direction.length()>0.1:
@@ -152,12 +166,13 @@ func _physics_process(delta: float) -> void:
   stamina = minf(100.0,stamina+(15.0 if direction.length()<0.1 else 10.0)*delta)
  if Input.is_action_just_pressed("flashlight"):
   light_on = not light_on
- if Input.is_action_just_pressed("switch_weapon") and attack_timer<=0.0:
-  weapon_index = (weapon_index+1)%weapons.size()
- if Input.is_action_just_pressed("attack_light"):
-  do_attack(false)
- if Input.is_action_just_pressed("attack_heavy"):
-  do_attack(true)
+ if Input.is_action_just_pressed("switch_weapon") and attack_timer<=0.0 and not inventory_locked:
+  select_weapon((weapon_index+1)%weapons.size())
+ if not inventory_locked:
+  if Input.is_action_just_pressed("attack_light"):
+   do_attack(false)
+  if Input.is_action_just_pressed("attack_heavy"):
+   do_attack(true)
  var state := "idle"
  if velocity.length()>5.0:
   state = "run" if run_state else "walk"
@@ -180,7 +195,7 @@ func do_dodge(direction: Vector2) -> void:
  stamina -= 22.0
 
 func do_attack(heavy: bool) -> void:
- if attack_timer>0.0 or health<=0.0: return
+ if attack_timer>0.0 or health<=0.0 or inventory_locked: return
  var is_pistol: bool = weapons[weapon_index]=="Pistola"
  var cost := 0.0 if is_pistol else (28.0 if heavy else 12.0)
  if stamina<cost: return
@@ -199,12 +214,21 @@ func do_attack(heavy: bool) -> void:
  var reach := 48.0 if weapon_index==1 else (46.0 if weapon_index>=2 else 38.0)
  var damage := (32.0 if heavy else (22.0 if combo_step==2 else 18.0))*(1.3 if weapon_index==1 else (1.15 if weapon_index>=2 else 1.0))
  if is_pistol:
-  reach = 245.0
+  reach = gun_range
   damage = 28.0
-  shot_flash = 0.11
+  shot_flash = 0.15
+  recoil = 1.0
   shots_fired += 1
  attack_reach = reach
  attack_damage = damage
+
+func select_weapon(index: int) -> void:
+ if index<0 or index>=weapons.size(): return
+ if attack_timer>0.0: return
+ last_weapon=weapon_index
+ weapon_index=index
+ equip_blend=1.0
+ queue_redraw()
 
 func take_hit(amount: float) -> void:
  if invulnerable>0.0 or dodge_timer>0.0 or health<=0.0: return
@@ -249,7 +273,12 @@ func _draw() -> void:
 func draw_carried_weapon(direction_name: String, frame: int, tint: Color) -> void:
  var info: Dictionary = CARRY[direction_name]
  var pos: Vector2 = info["pos"]
+ pos.y += equip_blend*8.0
  var angle: float = info["gun"] if weapon_index==4 else info["angle"]
+ if weapon_index==4:
+  pos -= facing.normalized()*recoil*8.0
+  angle += recoil*10.0
+  # El arma permanece visible incluso cuando el personaje está quieto.
  if frame%2==1:
   if anim_state=="walk":
    pos.y -= 1.0
@@ -260,4 +289,7 @@ func draw_carried_weapon(direction_name: String, frame: int, tint: Color) -> voi
  var grip: Vector2 = WEAPON_GRIP[weapon_index]
  draw_set_transform(pos,deg_to_rad(angle),Vector2(WEAPON_SCALE,WEAPON_SCALE))
  draw_texture(WEAPON_ART[weapon_index],-grip,tint)
+ if weapon_index==4 and shot_flash>0.0:
+  draw_rect(Rect2(Vector2(63,-3),Vector2(12,6)),Color(1.0,0.84,0.42,shot_flash/0.15))
+  draw_rect(Rect2(Vector2(75,-1),Vector2(8,2)),Color(1.0,0.96,0.78,shot_flash/0.15))
  draw_set_transform(Vector2.ZERO,0.0,Vector2.ONE)
