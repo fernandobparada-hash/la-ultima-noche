@@ -59,6 +59,7 @@ func _ready() -> void:
  mobile_controls = MobileControlsScript.new()
  add_child(mobile_controls)
  mobile_controls.respawn_requested.connect(respawn_player)
+ player.mobile_input = mobile_controls
  show_message("Despiertas en una casa desconocida. Busca respuestas.",5.0)
 
 func add_obstacle(area: Rect2) -> StaticBody2D:
@@ -172,7 +173,7 @@ func _process(delta: float) -> void:
  if game_over and Input.is_action_just_pressed("restart"):
   respawn_player()
  var status := "INACTIVO" if enemy.defeated else enemy.state
- ui.text="LA ÚLTIMA NOCHE   /   CAPÍTULO CERO\nVIDA %d   ·   ENERGÍA %d   ·   %s   ·   LINTERNA %s" % [int(player.health),int(player.stamina),player.weapons[player.weapon_index],"ENCENDIDA" if player.light_on else "APAGADA"]
+ ui.text="LA ÚLTIMA NOCHE   /   CAPÍTULO CERO\nVIDA %d   ·   ENERGÍA %d   ·   %s   ·   LINTERNA %s" % [int(player.health),int(player.stamina),(player.weapons[player.weapon_index]+(" · ∞" if player.weapons[player.weapon_index]=="Pistola" else "")),"ENCENDIDA" if player.light_on else "APAGADA"]
  objective.text="OBJETIVO  /  %s" % ["Explora la calle y evita al Errante" if found_exit else ("Abre la puerta de salida" if took_key else "Busca la llave en la cocina")]
  if player.position.x>500.0 and player.position.y>355.0 and not found_exit:
   found_exit=true
@@ -242,6 +243,24 @@ func _draw() -> void:
  for rect in [Rect2(120,40,62,14),Rect2(334,40,66,14),Rect2(456,247,14,53)]:
   draw_rect(rect,Color("a5a69a"))
   draw_rect(rect.grow(-3),Color("52656b"))
+ # Baldosas y sombras de muebles, con líneas a escala de píxel.
+ for yy in range(66,320,16):
+  for xx in range(64,449,16):
+   if (xx/16+yy/16)%7==0:
+    draw_rect(Rect2(xx+4,yy+5,3,2),Color("302c2b"))
+ # Estantería de madera y libros de colores desaturados.
+ draw_rect(Rect2(275,78,20,114),Color("282626"))
+ draw_rect(Rect2(278,82,14,105),Color("59473b"))
+ for yy in [90,122,154]:
+  draw_rect(Rect2(278,yy,14,3),Color("a18b69"))
+  for xx in [280,284,288]:
+   draw_rect(Rect2(xx,yy-12,3,12),Color("66685c") if xx%2==0 else Color("80634f"))
+ # Alfombra con bordes ornamentales geométricos.
+ draw_rect(Rect2(285,228,130,16),Color("3b3438"))
+ draw_rect(Rect2(289,231,122,10),Color("69534b"),false,2.0)
+ # Luz de ventana sobre el suelo, con bordes escalonados.
+ draw_rect(Rect2(120,59,62,4),Color(0.68,0.68,0.57,0.10))
+ draw_rect(Rect2(124,63,54,5),Color(0.68,0.68,0.57,0.07))
  # Exterior vegetation and street furniture.
  for p in [Vector2(510,95),Vector2(602,142),Vector2(770,105),Vector2(927,195),Vector2(915,320),Vector2(520,560)]:
   draw_rect(Rect2(p+Vector2(-17,-10),Vector2(39,37)),Color(0.03,0.05,0.05,0.38))

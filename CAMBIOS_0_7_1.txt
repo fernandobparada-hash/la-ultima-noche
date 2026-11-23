@@ -1,0 +1,1 @@
+Alpha 0.7.1: se corrigió la inferencia de bool en player.gd; joystick analógico táctil con zona muerta, movimiento diagonal y vista previa F9 con ratón; REAPARECER permanece oculto hasta morir. Conserva las cinco armas.

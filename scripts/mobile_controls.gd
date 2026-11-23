@@ -9,6 +9,13 @@ var touch_buttons: Array[TouchScreenButton] = []
 var respawn: Button
 var game_over := false
 var status: Label
+var joystick_vector := Vector2.ZERO
+var joystick_pointer := -1
+var joystick_center := Vector2(119,420)
+var joystick_radius := 61.0
+var joystick_active := false
+var joystick_layer: Control
+
 
 func _ready() -> void:
  is_mobile = OS.has_feature("mobile") or (OS.has_feature("web") and DisplayServer.is_touchscreen_available())
@@ -17,10 +24,11 @@ func _ready() -> void:
 
 func build_controls() -> void:
  # Positions in 960x540 design viewport. Canvas items scale with the game.
- add_touch("move_left", "◀", Vector2(32,420))
- add_touch("move_right", "▶", Vector2(188,420))
- add_touch("move_up", "▲", Vector2(110,347))
- add_touch("move_down", "▼", Vector2(110,475))
+ joystick_layer = Control.new()
+ joystick_layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+ joystick_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+ joystick_layer.draw.connect(_draw_joystick)
+ add_child(joystick_layer)
  add_touch("run", "CORRER", Vector2(282,450), 13)
  add_touch("crouch", "SIGILO", Vector2(390,450), 13)
  add_touch("interact", "USAR", Vector2(826,345), 16)
@@ -69,6 +77,12 @@ func set_mobile(enabled: bool) -> void:
   button.visible=is_mobile and not game_over
  respawn.visible=is_mobile and game_over
  status.visible=false
+ joystick_layer.visible=is_mobile and not game_over
+ if not joystick_layer.visible:
+  joystick_vector=Vector2.ZERO
+  joystick_pointer=-1
+  joystick_active=false
+ joystick_layer.queue_redraw()
 
 func set_dead(dead: bool) -> void:
  game_over=dead
@@ -78,3 +92,56 @@ func _unhandled_key_input(event: InputEvent) -> void:
  if event is InputEventKey and event.pressed and not event.echo and event.keycode==KEY_F9:
   set_mobile(not is_mobile)
   get_viewport().set_input_as_handled()
+
+func _input(event: InputEvent) -> void:
+ if not is_mobile or game_over: return
+ if event is InputEventScreenTouch:
+  var touch := event as InputEventScreenTouch
+  if touch.pressed and joystick_pointer == -1 and touch.position.x < 300.0 and touch.position.y > 265.0:
+   joystick_pointer = touch.index
+   joystick_active = true
+   _move_stick(touch.position)
+   get_viewport().set_input_as_handled()
+  elif not touch.pressed and touch.index == joystick_pointer:
+   joystick_pointer=-1
+   joystick_active=false
+   joystick_vector=Vector2.ZERO
+   joystick_layer.queue_redraw()
+   get_viewport().set_input_as_handled()
+ elif event is InputEventScreenDrag:
+  var drag := event as InputEventScreenDrag
+  if drag.index == joystick_pointer:
+   _move_stick(drag.position)
+   get_viewport().set_input_as_handled()
+ # F9 preview on desktop: mouse can operate the joystick too.
+ elif event is InputEventMouseButton and OS.has_feature("mobile") == false:
+  var mouse := event as InputEventMouseButton
+  if mouse.button_index == MOUSE_BUTTON_LEFT:
+   if mouse.pressed and joystick_pointer == -1 and mouse.position.x < 300.0 and mouse.position.y > 265.0:
+    joystick_pointer=-2
+    joystick_active=true
+    _move_stick(mouse.position)
+   elif not mouse.pressed and joystick_pointer == -2:
+    joystick_pointer=-1
+    joystick_active=false
+    joystick_vector=Vector2.ZERO
+    joystick_layer.queue_redraw()
+ elif event is InputEventMouseMotion and joystick_pointer == -2:
+  _move_stick((event as InputEventMouseMotion).position)
+
+func _move_stick(position: Vector2) -> void:
+ joystick_vector = ((position-joystick_center)/joystick_radius).limit_length(1.0)
+ if joystick_vector.length() < 0.14:
+  joystick_vector = Vector2.ZERO
+ joystick_layer.queue_redraw()
+
+func _draw_joystick() -> void:
+ if not is_mobile or game_over: return
+ var center := joystick_center
+ joystick_layer.draw_circle(center,joystick_radius+9.0,Color(0.03,0.06,0.08,0.36))
+ joystick_layer.draw_arc(center,joystick_radius,0.0,TAU,48,Color(0.68,0.77,0.73,0.57),3.0,true)
+ joystick_layer.draw_circle(center,joystick_radius-5.0,Color(0.13,0.20,0.21,0.35))
+ var thumb := center+joystick_vector*joystick_radius
+ joystick_layer.draw_circle(thumb,28.0,Color(0.07,0.11,0.12,0.86))
+ joystick_layer.draw_arc(thumb,26.0,0.0,TAU,32,Color(0.82,0.83,0.70,0.8),2.0,true)
+ joystick_layer.draw_circle(thumb,8.0,Color(0.62,0.70,0.64,0.65))

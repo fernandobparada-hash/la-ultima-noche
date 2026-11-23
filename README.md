@@ -41,3 +41,14 @@ WASD/flechas: caminar · Shift: correr · C: agacharse · E: examinar · F: lint
 - Niebla ambiental ligera y animada en exteriores y cerca de la entrada.
 - Mantiene el código de combate, Errante, inventario de armas y controles móviles.
 - Aún pendiente: probar la ejecución en Godot y mejorar el resto del escenario.
+
+
+## Alpha 0.7: personajes basados en las imágenes originales
+- Sprites del protagonista recortados de su lámina conceptual original (no redibujos aproximados).
+- Errante recortado de la lámina de criaturas original.
+- Niebla exterior visible, animada y más densa.
+- Armas: palo, barra, tubo, llave inglesa y pistola ficticia con munición infinita.
+- Cambiar arma: Q; ataque: J/K; controles móviles: ARMA/GOLPE.
+- La pistola tiene alcance de videojuego y no atraviesa paredes.
+- Las poses de caminata usan las vistas disponibles del concepto; quedan pendientes animaciones manuales más fluidas.
+- Godot 4: el proyecto no se ha ejecutado en este entorno.

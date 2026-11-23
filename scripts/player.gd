@@ -12,12 +12,12 @@ var facing := Vector2.DOWN
 var light: PointLight2D
 var cone: Polygon2D
 var weapon_index := 0
-var weapons := ["Palo", "Barra"]
+var weapons := ["Palo", "Barra", "Tubo", "Llave inglesa", "Pistola"]
 var attack_timer := 0.0
 var attack_flash := 0.0
 var invulnerable := 0.0
 var walk_phase := 0.0
-const WALK = {"down": preload("res://assets/player_walk_down.png"), "up": preload("res://assets/player_walk_up.png"), "left": preload("res://assets/player_walk_left.png"), "right": preload("res://assets/player_walk_right.png")}
+const WALK = {"down": preload("res://assets/hero_concept_down.png"), "up": preload("res://assets/hero_concept_up.png"), "left": preload("res://assets/hero_concept_left.png"), "right": preload("res://assets/hero_concept_right.png")}
 var attack_duration := 0.0
 var attack_heavy := false
 var attack_facing := Vector2.DOWN
@@ -25,6 +25,9 @@ var attack_damage_done := false
 var attack_reach := 38.0
 var attack_damage := 18.0
 var idle_time := 0.0
+var shot_flash := 0.0
+var shots_fired := 0
+var mobile_input: NightMobileControls
 
 func _ready() -> void:
  collision_layer = 1
@@ -36,7 +39,7 @@ func _ready() -> void:
  add_child(shape)
  var camera := Camera2D.new()
  camera.enabled = true
- camera.position_smoothing_enabled = true
+ camera.position_smoothing_enabled = false
  camera.position_smoothing_speed = 7.0
  add_child(camera)
  light = PointLight2D.new()
@@ -60,6 +63,7 @@ func make_light_texture() -> Texture2D:
 
 func _physics_process(delta: float) -> void:
  idle_time += delta
+ shot_flash = maxf(0.0,shot_flash-delta)
  attack_timer = maxf(0.0,attack_timer-delta)
  if attack_duration>0.0 and not attack_damage_done:
   var progress := 1.0-attack_timer/attack_duration
@@ -69,6 +73,8 @@ func _physics_process(delta: float) -> void:
  attack_flash = maxf(0.0,attack_flash-delta)
  invulnerable = maxf(0.0,invulnerable-delta)
  var direction := Input.get_vector("move_left","move_right","move_up","move_down")
+ if mobile_input != null and mobile_input.is_mobile and mobile_input.joystick_vector.length() > 0.05:
+  direction = mobile_input.joystick_vector
  crouched = Input.is_action_pressed("crouch")
  var running := Input.is_action_pressed("run") and not crouched and stamina>1.0 and direction.length()>0.0
  var speed := 62.0 if crouched else (158.0 if running else 103.0)
@@ -96,17 +102,23 @@ func _physics_process(delta: float) -> void:
 
 func do_attack(heavy: bool) -> void:
  if attack_timer>0.0 or health<=0.0: return
- var cost := 28.0 if heavy else 12.0
+ var is_pistol: bool = weapons[weapon_index]=="Pistola"
+ var cost := 0.0 if is_pistol else (28.0 if heavy else 12.0)
  if stamina<cost: return
  stamina -= cost
- attack_timer = 0.72 if heavy else 0.36
+ attack_timer = (0.40 if heavy else 0.24) if is_pistol else (0.72 if heavy else 0.36)
  attack_duration = attack_timer
  attack_heavy = heavy
  attack_facing = facing
  attack_damage_done = false
  attack_flash = 0.20
- var reach := 48.0 if weapon_index==1 else 38.0
- var damage := (32.0 if heavy else 18.0)*(1.3 if weapon_index==1 else 1.0)
+ var reach := 48.0 if weapon_index==1 else (46.0 if weapon_index>=2 else 38.0)
+ var damage := (32.0 if heavy else 18.0)*(1.3 if weapon_index==1 else (1.15 if weapon_index>=2 else 1.0))
+ if is_pistol:
+  reach = 245.0
+  damage = 28.0
+  shot_flash = 0.11
+  shots_fired += 1
  attack_reach = reach
  attack_damage = damage
 
@@ -127,9 +139,15 @@ func _draw() -> void:
  var frame := int(floor(walk_phase*1.9))%4 if moving else 1
  var bob := roundf(sin(walk_phase*1.9)) if moving else 0.0
  var tint := Color(1,1,1,0.5 if invulnerable>0.0 and fmod(invulnerable,0.2)>0.1 else 1.0)
- var region := Rect2(frame*64,0,64,80)
- draw_texture_rect_region(WALK[direction_name],Rect2(-32,-64+bob,64,80),region,tint)
- var weapon_color := Color("b0b6b1") if weapon_index==1 else Color("947654")
+ var region := Rect2(frame*48,0,48,72)
+ draw_texture_rect_region(WALK[direction_name],Rect2(-24,-62+bob,48,72),region,tint)
+ var weapon_color := Color("b0b6b1") if weapon_index!=0 else Color("947654")
+ if weapons[weapon_index]=="Pistola":
+  var muzzle := facing*24.0+Vector2(0,-12)
+  draw_line(facing*10.0+Vector2(0,-12),muzzle,Color("32383a"),5.0)
+  if shot_flash>0.0:
+   draw_rect(Rect2(muzzle-Vector2(4,4),Vector2(8,8)),Color("eec37c"))
+  return
  if attack_timer>0.0 and attack_duration>0.0:
   var t := clampf(1.0-attack_timer/attack_duration,0.0,1.0)
   # Preparación, barrido y recuperación: la trayectoria acompaña al golpe.

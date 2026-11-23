@@ -13,7 +13,7 @@ var health := 95.0
 var hit_flash := 0.0
 var attack_cooldown := 0.0
 var defeated := false
-const WALK = {"down": preload("res://assets/errante_walk_down.png"), "up": preload("res://assets/errante_walk_up.png"), "left": preload("res://assets/errante_walk_left.png"), "right": preload("res://assets/errante_walk_right.png")}
+const WALK = {"down": preload("res://assets/errante_concept_down.png"), "up": preload("res://assets/errante_concept_up.png"), "left": preload("res://assets/errante_concept_left.png"), "right": preload("res://assets/errante_concept_right.png")}
 var animation_time := 0.0
 var last_direction := Vector2.DOWN
 var stagger := 0.0
@@ -88,6 +88,9 @@ func receive_attack(origin: Vector2,direction: Vector2,reach: float,damage: floa
  var offset := global_position-origin
  if offset.length()>reach+11.0: return false
  if offset.length()>16.0 and direction.dot(offset.normalized())<0.40: return false
+ if reach>100.0:
+  var query := PhysicsRayQueryParameters2D.create(origin,global_position,2)
+  if not get_world_2d().direct_space_state.intersect_ray(query).is_empty(): return false
  health = maxf(0.0,health-damage)
  hit_flash = 0.20
  stagger = 0.18
@@ -120,9 +123,9 @@ func _draw() -> void:
  elif last_direction.y<0:
   direction_name = "up"
  var frame := int(animation_time*3.0)%4 if velocity.length()>5.0 else 1
- var shudder := sin(animation_time*3.2)*0.7
+ var shudder := roundf(sin(animation_time*3.2))
  var color := Color("e7c9b9") if hit_flash>0.0 else Color.WHITE
- draw_texture_rect_region(WALK[direction_name],Rect2(-32+shudder,-49,64,64),Rect2(frame*64,0,64,64),color)
+ draw_texture_rect_region(WALK[direction_name],Rect2(-24+shudder,-62,48,72),Rect2(frame*48,0,48,72),color)
 
 func draw_ellipse_shadow() -> void:
  draw_set_transform(Vector2(0,11),0.0,Vector2(1.0,0.32))

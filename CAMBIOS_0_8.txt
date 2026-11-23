@@ -1,0 +1,1 @@
+Alpha 0.8: protagonista extraído de las 12 poses del diseño adjunto; sprites 4 direcciones con poses de caminata y carrera; arte de interiores enriquecido; niebla visible; cámara pixel art sin suavizado; joystick y armas conservados. Requiere prueba en Godot 4.
