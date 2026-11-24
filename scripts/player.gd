@@ -64,14 +64,25 @@ const FRAME_W := 128
 const FRAME_H := 144
 const DRAW_RECT := Rect2(-64,-113,128,144)
 const CROUCH_SCALE := 0.93
-# El sprite de cada arma mira a la derecha. El mango está en x=12 aprox.
-const WEAPON_SCALE := 0.55
-const WEAPON_GRIP = [Vector2(12,25),Vector2(10,25),Vector2(12,27),Vector2(12,30),Vector2(24,28)]
-# Puntos de mano medidos respecto al origen (pies) del protagonista.
-const HAND_ANCHORS = {
- "down": Vector2(17,-30), "up": Vector2(-16,-34),
- "right": Vector2(19,-33), "left": Vector2(-19,-33)
+# Armas dibujadas a escala 1:1 (mismo tamaño de píxel que el personaje), mirando a la derecha.
+# WEAPON_GRIP = punto de la textura donde la mano sostiene el arma (coordenadas de la textura).
+const WEAPON_GRIP = [Vector2(6,6),Vector2(8,5),Vector2(7,6),Vector2(7,8),Vector2(6,11)]
+# Boca de la pistola dentro de su textura.
+const PISTOL_MUZZLE := Vector2(22,4)
+const REST_BASE = {"right":0.0,"down":PI/2.0,"left":PI,"up":-PI/2.0}
+# Posición exacta de la mano (medida en cada cuadro de las hojas del protagonista), relativa al origen (pies).
+# HAND_W = mano que lleva el arma; HAND_F = mano de la linterna (sólo vistas frontal y trasera).
+const HAND_W = {
+ "idle": {"down":[Vector2(17,-17),Vector2(17,-18),Vector2(17,-18),Vector2(17,-18)], "up":[Vector2(-16,-18),Vector2(-16,-18),Vector2(-16,-18),Vector2(-16,-18)], "left":[Vector2(6,-17),Vector2(6,-18),Vector2(5,-19),Vector2(6,-18)], "right":[Vector2(-7,-15),Vector2(-7,-16),Vector2(-7,-16),Vector2(-7,-16)]},
+ "walk": {"down":[Vector2(19,-26),Vector2(17,-18),Vector2(19,-26),Vector2(17,-18)], "up":[Vector2(-19,-26),Vector2(-16,-19),Vector2(-20,-25),Vector2(-16,-19)], "left":[Vector2(7,-17),Vector2(6,-18),Vector2(7,-17),Vector2(6,-18)], "right":[Vector2(-8,-17),Vector2(-7,-16),Vector2(-8,-17),Vector2(-7,-16)]},
+ "run": {"down":[Vector2(18,-32),Vector2(18,-35),Vector2(19,-30),Vector2(19,-33)], "up":[Vector2(-18,-31),Vector2(-18,-34),Vector2(-20,-29),Vector2(-20,-32)], "left":[Vector2(6,-20),Vector2(6,-23),Vector2(6,-20),Vector2(6,-23)], "right":[Vector2(-8,-21),Vector2(-8,-24),Vector2(-8,-21),Vector2(-8,-24)]}
 }
+const HAND_F = {
+ "idle": {"down":[Vector2(-17,-17),Vector2(-17,-18),Vector2(-17,-18),Vector2(-17,-18)], "up":[Vector2(16,-18),Vector2(16,-18),Vector2(16,-18),Vector2(16,-18)]},
+ "walk": {"down":[Vector2(-19,-26),Vector2(-17,-18),Vector2(-19,-26),Vector2(-17,-18)], "up":[Vector2(20,-25),Vector2(16,-19),Vector2(19,-26),Vector2(16,-19)]},
+ "run": {"down":[Vector2(-19,-30),Vector2(-19,-33),Vector2(-18,-32),Vector2(-18,-35)], "up":[Vector2(20,-29),Vector2(20,-32),Vector2(18,-31),Vector2(18,-34)]}
+}
+var draw_frame := 0
 var attack_duration := 0.0
 var attack_heavy := false
 var attack_facing := Vector2.DOWN
@@ -267,18 +278,51 @@ func get_direction_name(direction: Vector2) -> String:
   return "right" if direction.x>0.0 else "left"
  return "up" if direction.y<0.0 else "down"
 
+func crouch_point(pos: Vector2) -> Vector2:
+ # Misma transformación que se aplica al sprite al agacharse.
+ return Vector2(pos.x*CROUCH_SCALE,(pos.y+113.0)*CROUCH_SCALE-104.6)
+
 func get_hand_position(direction: Vector2) -> Vector2:
- var pos: Vector2 = HAND_ANCHORS[get_direction_name(direction)]
- if anim_state=="walk": pos.y+=sin(anim_time*13.0)*1.5
- elif anim_state=="run": pos.y+=sin(anim_time*18.0)*2.5
- if crouched: pos.y+=4.0
- return pos
+ var table: Array = HAND_W[anim_state][get_direction_name(direction)]
+ var pos: Vector2 = table[draw_frame%4]
+ if crouched: pos=crouch_point(pos)
+ return pos.round()
+
+func get_weapon_pose(direction: Vector2) -> Dictionary:
+ # Un solo cálculo para dibujar el arma y para disparar: posición de la mano, rotación y espejo vertical.
+ var side := get_direction_name(direction)
+ var hand := get_hand_position(direction)
+ var aim := direction.normalized()
+ var flip := false
+ var rot := 0.0
+ var attack_active := attack_timer>0.0 and attack_duration>0.0
+ if weapon_index==4:
+  # Pistola: apunta hacia donde mira el personaje; el espejo mantiene la empuñadura hacia abajo.
+  rot=aim.angle()
+  flip=aim.x<-0.01
+  hand-=aim*recoil*3.0
+ elif attack_active:
+  var progress := clampf(1.0-attack_timer/attack_duration,0.0,1.0)
+  var anticipation := -0.9 if attack_heavy else -0.65
+  var follow := 1.15 if attack_heavy else 0.85
+  var swing := lerpf(anticipation,follow,smoothstep(0.18,0.72,progress))
+  flip=aim.x<-0.01
+  rot=aim.angle()+(-swing if flip else swing)
+  hand+=aim*(3.0*sin(progress*PI))
+ else:
+  # Reposo: el arma sale de la mano apuntando adelante y un poco hacia arriba.
+  flip=side=="left"
+  rot=float(REST_BASE[side])+(0.45 if flip else -0.45)
+ # Rotación en pasos de 15° para que el pixel art no se deforme.
+ rot=snappedf(rot,PI/12.0)
+ return {"pos":hand.round(),"rot":rot,"flip":flip}
 
 func get_weapon_muzzle(direction: Vector2) -> Vector2:
- # El mismo origen y dirección se usan para dibujar el arma y disparar.
- var hand := get_hand_position(direction)
- var kick := recoil*7.0 if weapon_index==4 else 0.0
- return hand+direction.normalized()*(29.0-kick)
+ # La boca sale del mismo transform con el que se dibuja la pistola.
+ var pose := get_weapon_pose(direction)
+ var local: Vector2 = PISTOL_MUZZLE-WEAPON_GRIP[4]
+ if pose["flip"]: local.y=-local.y
+ return pose["pos"]+local.rotated(pose["rot"])
 
 func _draw() -> void:
  var look := attack_facing if attack_timer>0.0 else facing
@@ -293,47 +337,35 @@ func _draw() -> void:
  if anim_state=="walk": fps=5.0 if crouched else 8.5
  elif anim_state=="run": fps=11.0
  var frame := int(floor(anim_time*fps))%4
+ draw_frame=frame
  var sheet: Texture2D=LOCO[anim_state][direction_name]
  draw_texture_rect_region(sheet,dest,Rect2(frame*FRAME_W,0,FRAME_W,FRAME_H),tint)
  draw_held_weapon(look,tint)
  if flashlight_equipped:
   draw_held_flashlight(look,tint)
 
+func draw_fist(hand: Vector2) -> void:
+ # Puño sobre la empuñadura: los dedos quedan por delante del mango.
+ var p := hand.round()
+ draw_rect(Rect2(p+Vector2(-3,-3),Vector2(6,6)),Color("221a1c"))
+ draw_rect(Rect2(p+Vector2(-2,-2),Vector2(4,4)),Color("b98d73"))
+ draw_rect(Rect2(p+Vector2(-2,-2),Vector2(4,1)),Color("d6ac8e"))
+ draw_rect(Rect2(p+Vector2(-2,0),Vector2(4,1)),Color("966c58"))
+ draw_rect(Rect2(p+Vector2(0,-1),Vector2(1,3)),Color("966c58"))
+
 func draw_held_weapon(direction: Vector2,tint: Color) -> void:
- var hand := get_hand_position(direction)
- var aim := direction.normalized()
- var angle := aim.angle()
- var progress := 0.0
- var attack_active := attack_timer>0.0 and attack_duration>0.0
- if attack_active:
-  progress=clampf(1.0-attack_timer/attack_duration,0.0,1.0)
- # Pistola: orientación estable incluso durante el disparo. Retroceso en línea recta.
- # Cuerpo a cuerpo: preparación, barrido y recuperación.
- if weapon_index==4:
-  hand-=aim*recoil*7.0
- else:
-  if attack_active:
-   var anticipation := -0.9 if attack_heavy else -0.65
-   var follow := 1.15 if attack_heavy else 0.85
-   var sweep := smoothstep(0.18,0.72,progress)
-   angle+=lerpf(anticipation,follow,sweep)
-   hand+=aim*(4.0*sin(progress*PI))
-  else:
-   # Armas en reposo apuntan hacia abajo respecto a la mano.
-   angle+=0.45
- var grip: Vector2=WEAPON_GRIP[weapon_index]
- draw_set_transform(hand,angle,Vector2.ONE*WEAPON_SCALE)
- draw_texture(WEAPON_ART[weapon_index],-grip,tint)
+ var pose := get_weapon_pose(direction)
+ var hand: Vector2 = pose["pos"]
+ draw_set_transform(hand,pose["rot"],Vector2(1.0,-1.0 if pose["flip"] else 1.0))
+ draw_texture(WEAPON_ART[weapon_index],-WEAPON_GRIP[weapon_index],tint)
  draw_set_transform(Vector2.ZERO,0.0,Vector2.ONE)
- # Mano pixelada sobre la empuñadura: el arma no parece flotar.
- var skin := Color("b98d73")
- draw_rect(Rect2(hand-Vector2(3,3),Vector2(7,7)),Color("282429"))
- draw_rect(Rect2(hand-Vector2(2,2),Vector2(5,5)),skin)
+ draw_fist(hand)
  if weapon_index==4 and shot_flash>0.0:
   var muzzle := get_weapon_muzzle(direction)
+  var aim := direction.normalized()
   var alpha := clampf(shot_flash/0.15,0.0,1.0)
-  draw_line(muzzle-aim*3.0,muzzle+aim*11.0,Color(1.0,0.87,0.52,alpha),4.0)
-  draw_circle(muzzle+aim*8.0,3.0,Color(1.0,0.98,0.80,alpha))
+  draw_line(muzzle-aim*2.0,muzzle+aim*10.0,Color(1.0,0.87,0.52,alpha),3.0)
+  draw_circle(muzzle+aim*6.0,3.0,Color(1.0,0.98,0.80,alpha))
 
 func draw_held_flashlight(direction: Vector2,tint: Color) -> void:
  # La mano contraria sostiene la linterna; orientación coherente con el cono de luz.
@@ -341,9 +373,15 @@ func draw_held_flashlight(direction: Vector2,tint: Color) -> void:
  var grip := Vector2(-18,-33) if side!="left" else Vector2(18,-33)
  if side=="up": grip=Vector2(17,-38)
  if side=="right": grip=Vector2(-15,-35)
- if anim_state=="walk": grip.y+=sin(anim_time*13.0+PI)*1.5
- elif anim_state=="run": grip.y+=sin(anim_time*18.0+PI)*2.5
- if crouched: grip.y+=4.0
+ if side=="down" or side=="up":
+  var ftable: Array = HAND_F[anim_state][side]
+  grip=ftable[draw_frame%4]
+  if crouched: grip=crouch_point(grip)
+ else:
+  if anim_state=="walk": grip.y+=sin(anim_time*13.0+PI)*1.5
+  elif anim_state=="run": grip.y+=sin(anim_time*18.0+PI)*2.5
+  if crouched: grip.y+=4.0
+ grip=grip.round()
  var rotation := direction.angle()
  # La textura está dibujada horizontalmente, con empuñadura a la izquierda.
  draw_set_transform(grip,rotation,Vector2(0.34,0.34))

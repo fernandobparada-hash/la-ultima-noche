@@ -58,6 +58,15 @@ const FOES = {
   "hurt":preload("res://assets/campanero_anim_hurt.png"),"death":preload("res://assets/campanero_anim_death.png"),
   "cell":Vector2(126,88),"atk_time":0.56,"atk_frames":6,"hurt_seq":[0,1,2,1],"death_frames":6,"death_dt":0.18,"shadow":17.0}
 }
+# Hojas de caminata/carrera de frente (cuadros 0-3) y de espalda (cuadros 4-7): [caminar, correr].
+const VERT_SHEETS = {
+ "Errante": [preload("res://assets/errante_anim_walkv.png"),preload("res://assets/errante_anim_runv.png")],
+ "Rastrero": [preload("res://assets/rastrero_anim_walkv.png"),preload("res://assets/rastrero_anim_runv.png")],
+ "Vigilante": [preload("res://assets/vigilante_anim_walkv.png"),preload("res://assets/vigilante_anim_runv.png")],
+ "Lamentador": [preload("res://assets/lamentador_anim_walkv.png"),preload("res://assets/lamentador_anim_runv.png")],
+ "Sabueso": [preload("res://assets/sabueso_anim_walkv.png"),preload("res://assets/sabueso_anim_runv.png")],
+ "Campanero": [preload("res://assets/campanero_anim_walkv.png"),preload("res://assets/campanero_anim_runv.png")]
+}
 var attack_anim := 0.0
 var hurt_anim := 0.0
 var death_time := 0.0
@@ -462,12 +471,13 @@ func _draw() -> void:
     tex=data["idle"]
     frame=1 if direction_name=="right" else 3
   else:
-   # Arriba/abajo: poses de frente y de espalda con balanceo de paso.
+   # Arriba/abajo: ciclo de paso propio (piernas alternadas y cuerpo que baja al apoyar).
    tex=data["idle"]
    frame=0 if direction_name=="down" else 2
    if moving:
-    bob=-float(step%2)*(2.0 if running else 1.0)
-    sway=float([-1.0,0.0,1.0,0.0][step])*(2.0 if running else 1.0)
+    var vsheets: Array = VERT_SHEETS[enemy_type]
+    tex=vsheets[1] if running else vsheets[0]
+    frame=step+(0 if direction_name=="down" else 4)
  var dest := Rect2(roundf(-cs.x*0.5+sway),roundf(14.0-cs.y+bob),cs.x,cs.y)
  if flip:
   draw_set_transform(Vector2.ZERO,0.0,Vector2(-1,1))

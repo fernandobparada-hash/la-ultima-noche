@@ -1,0 +1,7 @@
+Alpha 2.7
+Armas: palo, barra, tubo, llave inglesa y pistola redibujadas a escala 1:1 (mismo tamaño de píxel que el protagonista). La pistola tiene corredera, cañón, mira, guardamonte y empuñadura.
+Manos: la posición de la mano se midió en cada cuadro de las animaciones del protagonista (reposo, caminar, correr, 4 direcciones), así que el arma sale de la mano y sigue el paso. Puño dibujado sobre el mango. Agachado ajusta la mano con la misma transformación que el sprite.
+Mirando a la izquierda las armas ya no salen al revés (la pistola ya no queda con la empuñadura hacia arriba). Rotaciones en pasos de 15° para no deformar el pixel art. El disparo sale de la boca real de la pistola.
+Linterna: en vistas frontal y trasera usa la mano medida.
+Enemigos: nuevas hojas *_anim_walkv.png y *_anim_runv.png (frente 0-3, espalda 4-7) para los 6 enemigos; patas alternadas y cuerpo que baja al apoyar, en lugar de deslizar un solo cuadro. Los laterales no se tocaron.
+Animaciones y sprites del protagonista intactos. Prueba en Godot pendiente.
