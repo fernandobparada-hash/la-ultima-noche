@@ -16,6 +16,8 @@ const FLASHLIGHT_SPRITE = preload("res://assets/flashlight_held.png")
 var facing := Vector2.DOWN
 var light: PointLight2D
 var cone: Polygon2D
+var beam: PointLight2D # Linterna mejorada: haz de luz suave que sale de la mano.
+var flash_hand := Vector2.ZERO # Punta de la linterna, calculada al dibujarla.
 var weapon_index := 0
 var weapons := ["Palo", "Barra", "Tubo", "Llave inglesa", "Pistola"]
 var attack_timer := 0.0
@@ -126,14 +128,39 @@ func _ready() -> void:
  add_child(camera)
  light = PointLight2D.new()
  light.texture = make_light_texture()
- light.texture_scale = 2.2
- light.energy = 1.1
+ light.texture_scale = 1.15 # círculo pequeño alrededor del personaje (se ven los pies)
+ light.energy = 0.75
  light.color = Color(1.0,0.88,0.67)
  add_child(light)
+ beam = PointLight2D.new()
+ beam.texture = make_beam_texture()
+ beam.texture_scale = 1.5 # alcance ~190 px, igual que el cono anterior
+ beam.energy = 1.35
+ beam.color = Color(1.0,0.93,0.80)
+ add_child(beam)
  cone = Polygon2D.new()
- cone.polygon = PackedVector2Array([Vector2.ZERO,Vector2(190,-66),Vector2(190,66)])
- cone.color = Color(1.0,0.87,0.59,0.085)
+ cone.polygon = PackedVector2Array([Vector2.ZERO,Vector2(190,-70),Vector2(200,0),Vector2(190,70)])
+ cone.vertex_colors = PackedColorArray([Color(1.0,0.9,0.7,0.05),Color(1.0,0.9,0.7,0.0),Color(1.0,0.9,0.7,0.0),Color(1.0,0.9,0.7,0.0)])
  add_child(cone)
+
+func make_beam_texture() -> Texture2D:
+ # Cono con degradado: centro blanco cálido, bordes suaves, se apaga hacia la oscuridad.
+ var size := 256
+ var c := size*0.5
+ var img := Image.create(size,size,false,Image.FORMAT_RGBA8)
+ for y in range(size):
+  for x in range(size):
+   var v := Vector2(x-c+0.5,y-c+0.5)
+   var r := v.length()/c
+   var a := 0.0
+   if v.x>0.0 and r<1.0:
+    var ang := absf(atan2(v.y,v.x))
+    var edge := 1.0-smoothstep(0.24,0.50,ang)
+    var core := 1.0-smoothstep(0.0,0.30,ang)*0.35
+    a = pow(1.0-r,1.35)*edge*core*smoothstep(0.0,0.06,r)
+   var warm := clampf(r*1.2,0.0,1.0)
+   img.set_pixel(x,y,Color(1.0,lerpf(0.98,0.84,warm),lerpf(0.92,0.62,warm),clampf(a,0.0,1.0)))
+ return ImageTexture.create_from_image(img)
 
 func make_light_texture() -> Texture2D:
  var img := Image.create(128,128,false,Image.FORMAT_RGBA8)
@@ -206,7 +233,15 @@ func _physics_process(delta: float) -> void:
  anim_time += delta
  light.visible = light_on
  cone.visible = light_on
- cone.rotation = facing.angle()
+ var beam_dir := attack_facing if attack_timer>0.0 else facing # igual que la linterna dibujada
+ cone.rotation = beam_dir.angle()
+ cone.position = flash_hand
+ beam.visible = light_on
+ beam.rotation = beam_dir.angle()
+ beam.position = flash_hand
+ var flicker := 1.0+0.03*sin(idle_time*29.0)*sin(idle_time*7.3)
+ if flashlight_battery<15.0 and randf()<0.03: flicker*=0.6
+ beam.energy = 1.35*flicker
  queue_redraw()
 
 func toggle_flashlight() -> void:
@@ -386,6 +421,7 @@ func draw_held_flashlight(direction: Vector2,tint: Color) -> void:
  # La textura está dibujada horizontalmente, con empuñadura a la izquierda.
  draw_set_transform(grip,rotation,Vector2(0.34,0.34))
  draw_texture(FLASHLIGHT_SPRITE,Vector2(-20,-28),tint)
+ flash_hand = grip+direction.normalized()*28.0
  draw_set_transform(Vector2.ZERO,0.0,Vector2.ONE)
  # Puño del personaje delante del mango, no una linterna flotante.
  draw_rect(Rect2(grip-Vector2(3,3),Vector2(7,7)),Color("282429"))
