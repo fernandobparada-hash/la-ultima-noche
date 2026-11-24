@@ -83,6 +83,7 @@ var previous_position := Vector2.ZERO
 
 func _ready() -> void:
  add_to_group("night_enemies")
+ print("[Enemigos] Alpha 2.3: sprites animados cargados para: ",FOES.keys())
  collision_layer = 4
  collision_mask = 2
  var c := CollisionShape2D.new()

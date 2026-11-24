@@ -318,7 +318,7 @@ func _process(delta: float) -> void:
  if game_over and Input.is_action_just_pressed("restart"):
   respawn_player()
  var status := "INACTIVO" if enemy.defeated else enemy.state
- ui.text="LA ÚLTIMA NOCHE   /   CAPÍTULO CERO\nVIDA %d   ·   ENERGÍA %d   ·   %s   ·   LINTERNA %s" % [int(player.health),int(player.stamina),(player.weapons[player.weapon_index]+(" · ∞" if player.weapons[player.weapon_index]=="Pistola" else "")),("%d%%" % int(player.flashlight_battery))+ (" ENCENDIDA" if player.light_on else " APAGADA")]
+ ui.text="LA ÚLTIMA NOCHE   /   CAPÍTULO CERO   /   ALPHA 2.3\nVIDA %d   ·   ENERGÍA %d   ·   %s   ·   LINTERNA %s" % [int(player.health),int(player.stamina),(player.weapons[player.weapon_index]+(" · ∞" if player.weapons[player.weapon_index]=="Pistola" else "")),("%d%%" % int(player.flashlight_battery))+ (" ENCENDIDA" if player.light_on else " APAGADA")]
  objective.text="[I] INVENTARIO   [ESPACIO] ESQUIVAR   [T] CAMBIAR ENEMIGO  /  %s" % ["Explora la calle y evita al Errante" if found_exit else ("Abre la puerta de salida" if took_key else "Busca la llave en la cocina")]
  if player.position.x>500.0 and player.position.y>355.0 and not found_exit:
   found_exit=true

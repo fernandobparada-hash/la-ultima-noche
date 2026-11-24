@@ -1,0 +1,1 @@
+Alpha 2.3: igual que 2.2 (sprites animados de los seis enemigos) mas la version ALPHA 2.3 visible en el HUD y un mensaje en la pestana Salida al crear un enemigo, para comprobar que se ejecuta esta carpeta y no una version anterior. Sin ejecutar en Godot.
