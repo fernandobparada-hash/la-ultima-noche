@@ -18,7 +18,7 @@ func _draw() -> void:
   for wisp in range(5):
    var x := 475.0 + fposmod(offset+float(wisp)*131.0, 540.0)-52.0
    var width := 125.0+float((band*3+wisp)%3)*33.0
-   var alpha := 0.09+float((band+wisp)%3)*0.02
+   var alpha := 0.045+float((band+wisp)%3)*0.012
    draw_rect(Rect2(x,y,width,13.0),Color(0.66,0.74,0.73,alpha))
    draw_rect(Rect2(x+15,y-7,width*0.77,7.0),Color(0.69,0.76,0.75,alpha*0.68))
    draw_rect(Rect2(x+29,y+13,width*0.53,7.0),Color(0.67,0.74,0.73,alpha*0.61))

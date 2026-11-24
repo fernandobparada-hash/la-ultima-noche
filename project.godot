@@ -1,7 +1,7 @@
 config_version=5
 
 [application]
-config/name="La Última Noche - Capítulo Cero - Alpha 2.7 - Armas en mano y paso de frente"
+config/name="La Última Noche - Capítulo Cero - Alpha 2.9.1 - Cartografía y mecanismos"
 run/main_scene="res://scenes/main.tscn"
 config/features=PackedStringArray("4.2", "GL Compatibility")
 
@@ -34,3 +34,5 @@ restart={"deadzone":0.2,"events":[Object(InputEventKey,"physical_keycode":82)]}
 dodge={"deadzone":0.2,"events":[Object(InputEventKey,"physical_keycode":32)]}
 inventory={"deadzone":0.2,"events":[Object(InputEventKey,"physical_keycode":73)]}
 change_enemy={"deadzone":0.2,"events":[Object(InputEventKey,"physical_keycode":84)]}
+
+map={"deadzone":0.2,"events":[Object(InputEventKey,"physical_keycode":77)]}
