@@ -1,0 +1,1 @@
+Alpha 1.8: maleta estilo survival horror, 12x6 casillas, objetos con tamaños distintos, selección, recolocación con dos clics y rotación con R o clic derecho. Iconos originales del juego. No se modificaron sprites del protagonista ni enemigos. Requiere prueba en Godot.

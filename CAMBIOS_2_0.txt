@@ -1,0 +1,1 @@
+Alpha 2.0: inventario visual estilo maleta metálica envejecida, marco, bisagras, casillas oscuras, resaltado dorado, selección y previsualización de colocación verde/rojo. Conserva tamaños, rotación y objetos, linterna, baterías y todos los sprites del usuario. No probado en Godot.

@@ -30,10 +30,12 @@ var death_label: Label
 var inventory_panel: PanelContainer
 var inventory_label: Label
 var inventory_open := false
-var inventory_items: Array[String] = ["Linterna", "Carta arrugada", "Botiquín"]
+var inventory_items: Array[String] = ["Linterna", "Carta arrugada", "Botiquín", "Batería"]
 var inventory_selection := 0
 var inventory_description: Label
-var inventory_list: ItemList
+var inventory_list: NightInventoryCase
+var inventory_slots: Array[Button] = []
+var inventory_count_label: Label
 var inventory_use_button: Button
 var tracer_start := Vector2.ZERO
 var tracer_end := Vector2.ZERO
@@ -70,6 +72,7 @@ func _ready() -> void:
  enemy.position = Vector2(570,425)
  enemy.points = [Vector2(570,425),Vector2(850,425),Vector2(850,540),Vector2(570,540)]
  enemy.target = player
+ enemy.omen.connect(func(message: String): show_message(message,3.0))
  add_child(enemy)
  enemy.scale=Vector2.ONE/WORLD_SCALE
  build_lighting()
@@ -172,79 +175,83 @@ func build_hud() -> void:
  death_label.add_theme_color_override("font_color",Color("e5d4b9"))
  death_panel.add_child(death_label)
  inventory_panel=PanelContainer.new()
- inventory_panel.position=Vector2(170,82)
- inventory_panel.custom_minimum_size=Vector2(620,385)
+ inventory_panel.position=Vector2(160,5)
+ inventory_panel.scale=Vector2(0.91,0.91)
+ inventory_panel.custom_minimum_size=Vector2(702,535)
  inventory_panel.visible=false
+ var panel_style := StyleBoxFlat.new()
+ panel_style.bg_color=Color("0b0d0c")
+ panel_style.border_color=Color("343d35")
+ panel_style.set_border_width_all(2)
+ panel_style.set_corner_radius_all(7)
+ panel_style.set_content_margin_all(4)
+ inventory_panel.add_theme_stylebox_override("panel",panel_style)
  canvas.add_child(inventory_panel)
- var backing := VBoxContainer.new()
- backing.add_theme_constant_override("separation",9)
- inventory_panel.add_child(backing)
- var heading := Label.new()
- heading.text="MOCHILA   ·   I para cerrar"
- heading.add_theme_font_size_override("font_size",22)
- backing.add_child(heading)
- var columns := HBoxContainer.new()
- backing.add_child(columns)
- inventory_list=ItemList.new()
- inventory_list.custom_minimum_size=Vector2(270,255)
- inventory_list.item_selected.connect(_on_inventory_selected)
- columns.add_child(inventory_list)
- var detail := VBoxContainer.new()
- detail.custom_minimum_size=Vector2(295,250)
- columns.add_child(detail)
+ var frame := VBoxContainer.new()
+ frame.add_theme_constant_override("separation",1)
+ inventory_panel.add_child(frame)
+ var title := Label.new()
+ title.text="  INVENTARIO   ·   MALETA"
+ title.add_theme_font_size_override("font_size",15)
+ title.add_theme_color_override("font_color",Color("d8c5a2"))
+ frame.add_child(title)
+ inventory_count_label=Label.new()
+ inventory_count_label.add_theme_font_size_override("font_size",12)
+ frame.add_child(inventory_count_label)
+ inventory_list=preload("res://scripts/inventory_case.gd").new()
+ inventory_list.item_selected.connect(_on_inventory_slot)
+ inventory_list.layout_changed.connect(refresh_inventory)
+ frame.add_child(inventory_list)
+ var lower := HBoxContainer.new()
+ frame.add_child(lower)
  inventory_description=Label.new()
+ inventory_description.custom_minimum_size=Vector2(488,40)
  inventory_description.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
- inventory_description.custom_minimum_size=Vector2(285,160)
- detail.add_child(inventory_description)
+ inventory_description.add_theme_font_size_override("font_size",13)
+ lower.add_child(inventory_description)
  inventory_use_button=Button.new()
  inventory_use_button.text="USAR / EQUIPAR"
+ inventory_use_button.custom_minimum_size=Vector2(185,40)
  inventory_use_button.pressed.connect(use_inventory_selection)
- detail.add_child(inventory_use_button)
- var hint := Label.new()
- hint.text="Armas: 1–5   ·   Botiquín: selecciónalo y pulsa USAR"
- hint.add_theme_font_size_override("font_size",13)
- backing.add_child(hint)
+ lower.add_child(inventory_use_button)
  refresh_inventory()
 
-func _on_inventory_selected(index: int) -> void:
+func _on_inventory_slot(index: int) -> void:
  inventory_selection=index
  refresh_inventory()
 
 func inventory_entries() -> Array[String]:
  var result: Array[String] = []
- for weapon in player.weapons:
-  result.append(weapon)
- for item in inventory_items:
-  result.append(item)
+ for weapon in player.weapons: result.append(weapon)
+ for item in inventory_items: result.append(item)
  return result
 
 func refresh_inventory() -> void:
  if inventory_list==null: return
  var entries := inventory_entries()
  inventory_selection=clampi(inventory_selection,0,maxi(0,entries.size()-1))
- inventory_list.clear()
- for i in range(entries.size()):
-  var prefix := "● " if i==player.weapon_index and i<player.weapons.size() else "   "
-  inventory_list.add_item(prefix+entries[i])
+ inventory_list.set_items(entries,player.weapons[player.weapon_index])
+ inventory_list.selected=inventory_selection
+ inventory_count_label.text="12 × 6 CASILLAS    ·    CLIC: MOVER    ·    R / CLIC DERECHO: GIRAR"
  if not entries.is_empty():
-  inventory_list.select(inventory_selection)
-  var selected := entries[inventory_selection]
+  var item := entries[inventory_selection]
   var descriptions := {
-   "Palo":"Arma improvisada. Ligera, rápida y de corto alcance.",
-   "Barra":"Golpes contundentes y mayor alcance.",
-   "Tubo":"Equilibrio entre alcance, velocidad y fuerza.",
-   "Llave inglesa":"Herramienta pesada, útil en combate cercano.",
-   "Pistola":"Arma a distancia. Munición infinita en esta versión. La trayectoria se detiene en paredes.",
-   "Linterna":"Ilumina las zonas oscuras, pero también puede delatarte.",
-   "Carta arrugada":"Una carta que estaba contigo al despertar.",
+   "Palo":"Arma ligera de corto alcance.","Barra":"Golpe contundente de mayor alcance.",
+   "Tubo":"Arma equilibrada de metal.","Llave inglesa":"Herramienta pesada de combate cercano.",
+   "Pistola":"Disparos a distancia. Munición infinita en esta prueba.",
+   "Linterna":"Linterna portátil en la mano libre. Consume energía al encenderla.",
+   "Batería":"Batería de repuesto. Restaura 45 % de energía de la linterna. Ocupa 2 × 1 casillas.",
+   "Carta arrugada":"Una carta que llevabas contigo al despertar.",
    "Carta encontrada":"Un mensaje misterioso encontrado en la casa.",
-   "Llave antigua":"Abre la puerta principal de la casa.",
-   "Botiquín":"Recupera 35 puntos de vida. Se consume al usarlo."
+   "Llave antigua":"Abre la puerta principal.",
+   "Botiquín":"Recupera 35 puntos de vida y se consume al usarlo."
   }
-  inventory_description.text=selected+"\n\n"+str(descriptions.get(selected,"Objeto de investigación."))
-  inventory_use_button.disabled=selected in ["Carta arrugada","Carta encontrada","Llave antigua"]
+  inventory_description.text=item+"\n"+str(descriptions.get(item,"Objeto de investigación."))
+  inventory_use_button.disabled=item in ["Carta arrugada","Carta encontrada","Llave antigua"]
  else:
-  inventory_description.text="La mochila está vacía."
+  inventory_description.text="Mochila vacía."
+  inventory_use_button.disabled=true
+ inventory_list.queue_redraw()
 
 func use_inventory_selection() -> void:
  var entries := inventory_entries()
@@ -261,7 +268,14 @@ func use_inventory_selection() -> void:
   inventory_items.erase("Botiquín")
   show_message("Usaste un botiquín. +35 de vida.",2.0)
  elif item=="Linterna":
-  player.light_on=not player.light_on
+  player.toggle_flashlight()
+ elif item=="Batería":
+  if player.flashlight_battery>=100.0:
+   show_message("La batería de la linterna está completa.",1.8)
+   return
+  player.recharge_flashlight(45.0)
+  inventory_items.erase("Batería")
+  show_message("Cambiaste la batería de la linterna. +45 %.",2.2)
  refresh_inventory()
 
 func respawn_player() -> void:
@@ -276,7 +290,7 @@ func _process(delta: float) -> void:
   inventory_panel.visible=inventory_open
   player.inventory_locked=inventory_open
   refresh_inventory()
- if Input.is_action_just_pressed("change_enemy") and not game_over:
+ if Input.is_action_just_pressed("change_enemy") and not game_over and not inventory_open:
   enemy.change_type()
   show_message("Enemigo de prueba: "+enemy.enemy_type,3.0)
  if inventory_open:
@@ -290,7 +304,7 @@ func _process(delta: float) -> void:
  if not knocks_triggered and player.position.y>230.0:
   knocks_triggered=true
   show_message("TOC... TOC... TOC... Algo golpea desde el pasillo.",4.0)
- if Input.is_action_just_pressed("interact") and not game_over:
+ if Input.is_action_just_pressed("interact") and not game_over and not inventory_open:
   interact()
  if player.health<=0.0 and not game_over:
   game_over=true
@@ -304,7 +318,7 @@ func _process(delta: float) -> void:
  if game_over and Input.is_action_just_pressed("restart"):
   respawn_player()
  var status := "INACTIVO" if enemy.defeated else enemy.state
- ui.text="LA ÚLTIMA NOCHE   /   CAPÍTULO CERO\nVIDA %d   ·   ENERGÍA %d   ·   %s   ·   LINTERNA %s" % [int(player.health),int(player.stamina),(player.weapons[player.weapon_index]+(" · ∞" if player.weapons[player.weapon_index]=="Pistola" else "")),"ENCENDIDA" if player.light_on else "APAGADA"]
+ ui.text="LA ÚLTIMA NOCHE   /   CAPÍTULO CERO\nVIDA %d   ·   ENERGÍA %d   ·   %s   ·   LINTERNA %s" % [int(player.health),int(player.stamina),(player.weapons[player.weapon_index]+(" · ∞" if player.weapons[player.weapon_index]=="Pistola" else "")),("%d%%" % int(player.flashlight_battery))+ (" ENCENDIDA" if player.light_on else " APAGADA")]
  objective.text="[I] INVENTARIO   [ESPACIO] ESQUIVAR   [T] CAMBIAR ENEMIGO  /  %s" % ["Explora la calle y evita al Errante" if found_exit else ("Abre la puerta de salida" if took_key else "Busca la llave en la cocina")]
  if player.position.x>500.0 and player.position.y>355.0 and not found_exit:
   found_exit=true
@@ -328,16 +342,16 @@ func _on_gun_fired(origin: Vector2, destination: Vector2, damage: float) -> void
  # Hitscan: el primer cuerpo sólido (pared o enemigo) detiene el disparo.
  var params := PhysicsRayQueryParameters2D.create(origin,destination,6,[player.get_rid()])
  var hit := get_world_2d().direct_space_state.intersect_ray(params)
- tracer_start=origin
- tracer_end=destination
+ tracer_start=to_local(origin)
+ tracer_end=to_local(destination)
  shot_impact=false
  if not hit.is_empty():
-  tracer_end=hit["position"]
+  tracer_end=to_local(hit["position"])
   shot_impact=true
   var collider: Object=hit["collider"]
   if collider is NightEnemy:
    var foe := collider as NightEnemy
-   if foe.receive_attack(origin,(tracer_end-origin).normalized(),origin.distance_to(tracer_end)+4.0,damage):
+   if foe.receive_attack(origin,(tracer_end-origin).normalized(),origin.distance_to(hit["position"])+4.0,damage):
     show_message(foe.enemy_type+" recibió el disparo.",1.0)
  tracer_lifetime=0.13
  enemy.hear_event(origin,380.0)

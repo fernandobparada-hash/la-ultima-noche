@@ -1,0 +1,1 @@
+Cuatro enemigos de prueba con sprites provisionales. T alterna seis tipos. Lamentador alerta a otros si existen; el modo actual usa un enemigo. Campanero emite aviso y pulso, sin sistema de campanadas de historia todavía. No probado en Godot.

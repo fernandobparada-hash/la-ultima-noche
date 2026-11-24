@@ -14,6 +14,15 @@ var hit_flash := 0.0
 var attack_cooldown := 0.0
 var defeated := false
 var enemy_type := "Errante"
+const TYPES = ["Errante", "Rastrero", "Vigilante", "Lamentador", "Sabueso", "Campanero"]
+const NEW_ART = {"Vigilante":preload("res://assets/vigilante_test.png"),"Lamentador":preload("res://assets/lamentador_test.png"),"Sabueso":preload("res://assets/sabueso_test.png"),"Campanero":preload("res://assets/campanero_test.png")}
+const HP = [95.0,115.0,130.0,85.0,100.0,160.0]
+var special_timer: float = 0.0
+var trail: Array[Vector2] = []
+var trail_timer: float = 0.0
+var pulse: float = 0.0
+signal omen(message: String)
+
 # Hojas de animación (todas miran a la DERECHA; a la izquierda se espeja). Orden de "idle": frente, lado→, espalda, lado←.
 const ERR_IDLE: Texture2D = preload("res://assets/errante_anim_idle.png")
 const ERR_WALK: Texture2D = preload("res://assets/errante_anim_walk.png")
@@ -54,6 +63,7 @@ var previous_position := Vector2.ZERO
 
 
 func _ready() -> void:
+ add_to_group("night_enemies")
  collision_layer = 4
  collision_mask = 2
  var c := CollisionShape2D.new()
@@ -63,8 +73,17 @@ func _ready() -> void:
  add_child(c)
 
 func change_type() -> void:
- enemy_type = "Rastrero" if enemy_type=="Errante" else "Errante"
- health = 115.0 if enemy_type=="Rastrero" else 95.0
+ var index: int = (TYPES.find(enemy_type)+1)%TYPES.size()
+ enemy_type = TYPES[index]
+ health = HP[index]
+ special_timer=0.0
+ trail.clear()
+ pulse=0.0
+ velocity=Vector2.ZERO
+ can_see=false
+ can_hear=false
+ ai_tick=0.0
+
  defeated = false
  suspicion = 0.0
  state = "PATRULLA"
@@ -95,6 +114,14 @@ func _physics_process(delta: float) -> void:
  alertness = maxf(0.0,alertness-delta*0.08)
  attack_anim = maxf(0.0,attack_anim-delta)
  hurt_anim = maxf(0.0,hurt_anim-delta)
+ special_timer=maxf(0.0,special_timer-delta)
+ pulse=maxf(0.0,pulse-delta)
+ trail_timer-=delta
+ if enemy_type=="Sabueso" and trail_timer<=0.0:
+  trail_timer=0.65
+  if target.velocity.length()>10.0:
+   trail.append(target.global_position)
+   if trail.size()>12: trail.pop_front()
  ai_tick -= delta
  var distance := global_position.distance_to(target.global_position)
  # Los rayos y el cálculo sensorial se actualizan a 10 Hz, no cada fotograma.
@@ -110,6 +137,13 @@ func _physics_process(delta: float) -> void:
   var toward := (target.global_position-global_position).normalized()
   var in_cone := last_direction.dot(toward)>-0.25 or distance<35.0
   can_see = distance<sight_range and in_cone and has_line_of_sight()
+ if enemy_type=="Vigilante" and state=="PATRULLA" and target.velocity.length()<12.0:
+  can_see=false
+ if enemy_type=="Sabueso" and not can_see and not trail.is_empty():
+  if global_position.distance_to(trail[0])<20.0: trail.pop_front()
+  if not trail.is_empty() and global_position.distance_to(trail[0])<220.0:
+   last_seen=trail[0]
+   suspicion=maxf(suspicion,0.45)
  if can_see:
   suspicion = minf(1.0,suspicion+delta*(2.0+alertness))
   last_seen = target.global_position
@@ -160,6 +194,23 @@ func _physics_process(delta: float) -> void:
   speed=55.0 if enemy_type=="Errante" else 78.0
   if global_position.distance_to(destination)<17.0:
    roam_offset=Vector2(randf_range(-45,45),randf_range(-45,45))
+ if enemy_type=="Vigilante" and state=="PATRULLA":
+  destination=global_position
+ if enemy_type=="Sabueso": speed*=1.12
+ if enemy_type=="Lamentador":
+  speed*=0.72
+  if state=="PERSECUCION" and special_timer<=0.0:
+   special_timer=9.0
+   pulse=1.0
+   omen.emit("Un lamento resuena en la calle.")
+   for node in get_tree().get_nodes_in_group("night_enemies"):
+    if node!=self and node is NightEnemy: node.hear_event(global_position,260.0)
+ if enemy_type=="Campanero":
+  speed*=0.65
+  if state=="PERSECUCION" and special_timer<=0.0:
+   special_timer=12.0
+   pulse=1.0
+   omen.emit("Una campanada rompe el silencio.")
  if windup>0.0:
   windup-=delta
   velocity=Vector2.ZERO
@@ -238,6 +289,9 @@ func has_line_of_sight() -> bool:
  return get_world_2d().direct_space_state.intersect_ray(query).is_empty()
 
 func _draw() -> void:
+ if enemy_type not in ["Errante","Rastrero"]:
+  draw_provisional()
+  return
  var is_ras := enemy_type=="Rastrero"
  var cs: Vector2 = RAS_CELL if is_ras else ERR_CELL
  draw_ellipse_shadow(21.0 if is_ras else 14.0)
@@ -316,3 +370,14 @@ func draw_ellipse_shadow(radius: float = 14.0) -> void:
  draw_set_transform(Vector2(0,11),0.0,Vector2(1.0,0.32))
  draw_circle(Vector2.ZERO,radius,Color(0.03,0.04,0.05,0.40))
  draw_set_transform(Vector2.ZERO)
+
+func draw_provisional() -> void:
+ draw_ellipse_shadow(16.0)
+ var tint: Color = Color("c8b3a2") if hit_flash>0.0 else Color.WHITE
+ var tex: Texture2D = NEW_ART[enemy_type]
+ var step: int = int(animation_time*3.0)%4 if velocity.length()>5.0 else 0
+ if attack_anim>0.0: step=2
+ if defeated: step=3
+ draw_texture_rect_region(tex,Rect2(-32,-64,64,80),Rect2(step*64,0,64,80),tint)
+ if pulse>0.0:
+  draw_arc(Vector2.ZERO,20.0+(1.0-pulse)*95.0,0.0,TAU,32,Color(0.7,0.65,0.45,pulse*0.6),2.0)

@@ -1,0 +1,1 @@
+Alpha 1.7: inventario tipo maleta de 8 columnas x 4 filas con iconos de objetos y armas; selección, equipar, usar y botiquín. Pistola: misma dirección para sprite, fogonazo y disparo; trayectoria convertida a coordenadas locales; armas sostenidas desde un punto de mano con mano visible y animación dinámica. Sprites del usuario sin modificaciones. Requiere probar en Godot.
