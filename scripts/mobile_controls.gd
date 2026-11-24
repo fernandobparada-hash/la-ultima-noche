@@ -78,7 +78,7 @@ func set_mobile(enabled: bool) -> void:
  is_mobile=enabled
  for button in touch_buttons:
   button.visible=is_mobile and not game_over
- respawn.visible=is_mobile and game_over
+ respawn.visible=false
  status.visible=false
  joystick_layer.visible=is_mobile and not game_over
  if not joystick_layer.visible:

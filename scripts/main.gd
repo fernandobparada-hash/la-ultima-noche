@@ -54,6 +54,11 @@ var door_progress: float = 0.0
 var door_opening := false
 var door_body: StaticBody2D
 var game_over := false
+var checkpoint := Vector2(170,130)
+var visited_houses: Dictionary = {}
+var death_layer: CanvasLayer
+const HOUSE_NAMES := ["Casa del reloj", "Casa de la biblioteca", "Casa del jardín", "Casa del viajero"]
+const HOUSE_LOOT := ["Batería", "Botiquín", "Batería", "Botiquín"]
 var world_time := 0.0
 var redraw_accum := 0.0
 var lamps: Array[PointLight2D] = []
@@ -191,7 +196,7 @@ func build_world() -> void:
   add_obstacle(area)
  for area in FURNITURE:
   add_obstacle(area)
- for area in BUILDINGS:
+ for area in house_obstacles():
   add_obstacle(area)
  door_body=add_obstacle(Rect2(210,336,55,14))
 
@@ -203,7 +208,7 @@ func rebuild_navigation() -> void:
  navigation.update()
  var obstacles: Array = WALLS.duplicate()
  obstacles.append_array(FURNITURE)
- obstacles.append_array(BUILDINGS)
+ obstacles.append_array(house_obstacles())
  if not door_open: obstacles.append(Rect2(210,336,55,14))
  for y in range(52):
   for x in range(84):
@@ -245,7 +250,26 @@ func make_glow() -> Texture2D:
    img.set_pixel(x,y,Color(1,1,1,pow(maxf(0.0,1.0-d),2.0)))
  return ImageTexture.create_from_image(img)
 
+func build_vignette() -> void:
+ # Oscurece los bordes de la pantalla para dar atmósfera y concentrar la vista en el centro.
+ var img := Image.create(160,90,false,Image.FORMAT_RGBA8)
+ for y in range(90):
+  for x in range(160):
+   var d := Vector2((x-79.5)/79.5,(y-44.5)/44.5).length()
+   img.set_pixel(x,y,Color(0.02,0.03,0.04,clampf((d-0.55)*0.62,0.0,0.62)))
+ var layer := CanvasLayer.new()
+ layer.layer=1
+ var rect := TextureRect.new()
+ rect.texture=ImageTexture.create_from_image(img)
+ rect.set_anchors_preset(Control.PRESET_FULL_RECT)
+ rect.expand_mode=TextureRect.EXPAND_IGNORE_SIZE
+ rect.stretch_mode=TextureRect.STRETCH_SCALE
+ rect.mouse_filter=Control.MOUSE_FILTER_IGNORE
+ layer.add_child(rect)
+ add_child(layer)
+
 func build_lighting() -> void:
+ build_vignette()
  var shade := CanvasModulate.new()
  shade.color=Color("535963")
  add_child(shade)
@@ -290,12 +314,15 @@ func build_hud() -> void:
  notice.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
  notice.custom_minimum_size=Vector2(800,0)
  canvas.add_child(notice)
+ death_layer=CanvasLayer.new()
+ death_layer.layer=30
+ add_child(death_layer)
  death_panel=ColorRect.new()
  death_panel.color=Color(0.035,0.045,0.05,0.82)
  death_panel.position=Vector2.ZERO
  death_panel.size=Vector2(960,540)
  death_panel.visible=false
- canvas.add_child(death_panel)
+ death_layer.add_child(death_panel)
  death_label=Label.new()
  death_label.text="LA NOCHE NO HA TERMINADO"
  death_label.position=Vector2(140,215)
@@ -304,6 +331,12 @@ func build_hud() -> void:
  death_label.add_theme_font_size_override("font_size",32)
  death_label.add_theme_color_override("font_color",Color("e5d4b9"))
  death_panel.add_child(death_label)
+ var retry := Button.new()
+ retry.text="VOLVER AL ÚLTIMO PUNTO [R]"
+ retry.position=Vector2(280,315)
+ retry.size=Vector2(400,58)
+ retry.pressed.connect(respawn_player)
+ death_panel.add_child(retry)
  inventory_panel=PanelContainer.new()
  inventory_panel.position=Vector2(160,8)
  inventory_panel.scale=Vector2(0.87,0.87)
@@ -446,9 +479,24 @@ func use_inventory_selection() -> void:
 
 func respawn_player() -> void:
  if game_over:
-  get_tree().reload_current_scene()
+  player.position=checkpoint
+  player.velocity=Vector2.ZERO
+  player.health=100.0
+  player.stamina=100.0
+  player.invulnerable=4.0
+  player.inventory_locked=false
+  game_over=false
+  death_panel.hide()
+  mobile_controls.set_dead(false)
+  player.set_physics_process(true)
+  for foe in foes:
+   foe.set_physics_process(true)
+  show_message("Has vuelto al último punto seguro.",3.0)
 
 func _process(delta: float) -> void:
+ if game_over:
+  if Input.is_action_just_pressed("restart"): respawn_player()
+  return
  world_time+=delta
  if door_opening:
   door_progress=minf(1.0,door_progress+delta/0.85)
@@ -497,12 +545,13 @@ func _process(delta: float) -> void:
   for foe in foes: foe.set_physics_process(false)
   mobile_controls.set_dead(true)
   paper_reader.hide()
+  close_exploration()
   death_panel.visible=true
   show_message("La oscuridad te alcanza. " + ("Toca REAPARECER." if mobile_controls.is_mobile else "Pulsa R para reaparecer."),999.0)
  if game_over and Input.is_action_just_pressed("restart"):
   respawn_player()
  var status := "INACTIVO" if enemy.defeated else enemy.state
- ui.text="LA ÚLTIMA NOCHE   /   CAPÍTULO CERO   /   ALPHA 2.9\nVIDA %d   ·   ENERGÍA %d   ·   %s   ·   LINTERNA %s" % [int(player.health),int(player.stamina),(player.weapons[player.weapon_index]+(" · ∞" if player.weapons[player.weapon_index]=="Pistola" else "")),("%d%%" % int(player.flashlight_battery))+ (" ENCENDIDA" if player.light_on else " APAGADA")]
+ ui.text="LA ÚLTIMA NOCHE   /   CAPÍTULO CERO   /   ALPHA 3.0\nVIDA %d   ·   ENERGÍA %d   ·   %s   ·   LINTERNA %s" % [int(player.health),int(player.stamina),(player.weapons[player.weapon_index]+(" · ∞" if player.weapons[player.weapon_index]=="Pistola" else "")),("%d%%" % int(player.flashlight_battery))+ (" ENCENDIDA" if player.light_on else " APAGADA")]
  objective.text="[I] INVENTARIO   [ESPACIO] ESQUIVAR   [M] MAPA  /  %s" % ["Explora la calle y evita al Errante" if found_exit else ("Abre la puerta de salida" if took_key else "Busca la llave en la cocina")]
  if player.position.x>500.0 and player.position.y>355.0 and not found_exit:
   found_exit=true
@@ -545,6 +594,18 @@ func _on_player_hurt(_amount: float) -> void:
  show_message("Un enemigo te ha alcanzado. Aléjate o utiliza una cobertura.",2.0)
 
 func interact() -> void:
+ for i in range(BUILDINGS.size()):
+  var area: Rect2=BUILDINGS[i]
+  var spot := area.position+Vector2(area.size.x*0.5,area.size.y*0.55)
+  if player.position.distance_to(spot)<30.0:
+   checkpoint=spot
+   if not visited_houses.has(i):
+    visited_houses[i]=true
+    inventory_items.append(HOUSE_LOOT[i])
+    refresh_inventory()
+    show_message(HOUSE_NAMES[i]+": encontraste "+HOUSE_LOOT[i]+". Punto guardado.",4.0)
+   else: show_message("Punto de retorno actualizado.",2.0)
+   return
  for i in range(PUZZLE_POINTS.size()):
   if player.position.distance_to(PUZZLE_POINTS[i])<30.0:
    if solved[i]: show_message("Ya resolviste este mecanismo.",2.0)
@@ -581,75 +642,9 @@ func show_message(message: String,duration: float) -> void:
 
 func _draw() -> void:
  # Authored, pixel-quantized texture; nearest-neighbor filtering.
- draw_texture(GROUND,Vector2.ZERO)
- # Bedroom rug and bedding.
- draw_rect(Rect2(76,73,113,74),Color("595147"))
- draw_rect(Rect2(80,77,105,66),Color("706255"),false,3.0)
- draw_rect(Rect2(90,85,75,32),Color("302e31"))
- draw_rect(Rect2(94,87,67,24),Color("7e827a"))
- draw_rect(Rect2(95,88,24,20),Color("c0b7a4"))
- draw_rect(Rect2(122,88,38,20),Color("5b6a6c"))
- # Kitchen counter, stove and shelves.
- draw_rect(Rect2(310,100,72,28),Color("302d2b"))
- draw_rect(Rect2(312,102,68,23),Color("77776b"))
- for x in [325,348,370]:
-  draw_rect(Rect2(x-5,107,10,10),Color("383b3a"))
- draw_rect(Rect2(300,57,120,12),Color("554b42"))
- for x in range(307,411,19):
-  draw_rect(Rect2(x,59,10,8),Color("82765e"))
- # Tables and cabinets.
- draw_rect(Rect2(105,250,80,26),Color("352f2b"))
- draw_rect(Rect2(108,251,74,20),Color("74624e"))
- draw_rect(Rect2(320,252,85,25),Color("332f2c"))
- draw_rect(Rect2(324,254,77,19),Color("6e6654"))
- draw_rect(Rect2(65,240,26,68),Color("423e37"))
- for y in [247,267,287]:
-  draw_line(Vector2(68,y),Vector2(88,y),Color("6f6253"),2.0)
- # Windows and frames.
- for rect in [Rect2(120,40,62,14),Rect2(334,40,66,14),Rect2(456,247,14,53)]:
-  draw_rect(rect,Color("a5a69a"))
-  draw_rect(rect.grow(-3),Color("52656b"))
- # Baldosas y sombras de muebles, con líneas a escala de píxel.
- for yy in range(66,320,16):
-  for xx in range(64,449,16):
-   if (xx/16+yy/16)%7==0:
-    draw_rect(Rect2(xx+4,yy+5,3,2),Color("302c2b"))
- # Estantería de madera y libros de colores desaturados.
- draw_rect(Rect2(275,78,20,114),Color("282626"))
- draw_rect(Rect2(278,82,14,105),Color("59473b"))
- for yy in [90,122,154]:
-  draw_rect(Rect2(278,yy,14,3),Color("a18b69"))
-  for xx in [280,284,288]:
-   draw_rect(Rect2(xx,yy-12,3,12),Color("66685c") if xx%2==0 else Color("80634f"))
- # Alfombra con bordes ornamentales geométricos.
- draw_rect(Rect2(285,228,130,16),Color("3b3438"))
- draw_rect(Rect2(289,231,122,10),Color("69534b"),false,2.0)
- # Luz de ventana sobre el suelo, con bordes escalonados.
- draw_rect(Rect2(120,59,62,4),Color(0.68,0.68,0.57,0.10))
- draw_rect(Rect2(124,63,54,5),Color(0.68,0.68,0.57,0.07))
- # Exterior vegetation and street furniture.
- for p in [Vector2(510,95),Vector2(602,142),Vector2(770,105),Vector2(927,195),Vector2(915,320),Vector2(520,560)]:
-  draw_rect(Rect2(p+Vector2(-17,-10),Vector2(39,37)),Color(0.03,0.05,0.05,0.38))
-  draw_rect(Rect2(p+Vector2(-17,-17),Vector2(34,34)),Color("35483f"))
-  draw_rect(Rect2(p+Vector2(-14,-14),Vector2(20,19)),Color("44584a"))
-  draw_rect(Rect2(p+Vector2(3,-5),Vector2(17,16)),Color("2c4039"))
- for x in [590,845]:
-  draw_rect(Rect2(x-3,379,6,32),Color("2c3133"))
-  draw_rect(Rect2(x-8,376,16,7),Color("c6ab7e"))
- draw_rect(Rect2(530,375,90,20),Color("353b3c"))
- draw_rect(Rect2(535,378,80,14),Color("565b58"))
- draw_rect(Rect2(700,475,90,20),Color("343938"))
- draw_rect(Rect2(704,478,82,13),Color("525650"))
- # Dirt and atmospheric marks.
- for i in range(45):
-  var px := 480.0+fmod(float(i*113+37),480.0)
-  var py := 365.0+fmod(float(i*73+17),225.0)
-  draw_rect(Rect2(px,py,4,2),Color(0.55,0.57,0.52,0.10))
- # Architectural walls with bevel and inner shadows.
- for wall in WALLS:
-  draw_rect(wall,Color("25292a"))
-  draw_line(wall.position,wall.position+Vector2(wall.size.x,0),Color("84837a"),2.0)
-  draw_line(wall.position+Vector2(0,wall.size.y),wall.end,Color("171c1f"),3.0)
+ draw_texture_rect(GROUND,Rect2(0,0,WORLD_W,WORLD_H),false)
+ draw_house_interiors()
+ # Muebles, paredes, ventanas, casas y vegetación están pintados en ground.png (2x de resolución).
  # Wooden door with fixed stone jambs and a smooth hinge animation.
  draw_rect(Rect2(210,336,55,14),Color("242a29"))
  draw_rect(Rect2(207,333,5,20),Color("a49a83"))
@@ -745,7 +740,7 @@ func build_exploration_ui() -> void:
  puzzle_mechanism.add_child(wheels)
  for i in range(3):
   var wheel := Button.new()
-  wheel.custom_minimum_size=Vector2(165,100)
+  wheel.custom_minimum_size=Vector2(165,150)
   wheel.add_theme_font_size_override("font_size",24)
   wheel.pressed.connect(turn_wheel.bind(i))
   wheels.add_child(wheel)
@@ -878,7 +873,11 @@ func turn_wheel(index: int) -> void:
 func update_wheels() -> void:
  for i in range(3):
   var wheel := puzzle_wheels[i]
-  wheel.text=SYMBOLS[wheel_values[i]] if active_puzzle==0 else "%d" % wheel_values[i]
+  wheel.text=""
+  wheel.icon=wheel_art(wheel_values[i],active_puzzle==0)
+  wheel.expand_icon=true
+  wheel.icon_alignment=HORIZONTAL_ALIGNMENT_CENTER
+  wheel.tooltip_text=SYMBOLS[wheel_values[i]] if active_puzzle==0 else str(wheel_values[i])
   wheel.disabled=solved[active_puzzle]
   for state in ["normal","hover","pressed","disabled"]:
    var style := StyleBoxFlat.new()
@@ -889,3 +888,47 @@ func update_wheels() -> void:
    style.set_corner_radius_all(40 if active_puzzle==0 else 9)
    wheel.add_theme_stylebox_override(state,style)
   wheel.add_theme_color_override("font_color",Color("e7d2a8"))
+
+
+func house_obstacles() -> Array[Rect2]:
+ var result: Array[Rect2]=[]
+ for area: Rect2 in BUILDINGS:
+  var x := area.position.x
+  var y := area.position.y
+  var w := area.size.x
+  var h := area.size.y
+  result.append(Rect2(x,y,w,8))
+  result.append(Rect2(x,y,8,h))
+  result.append(Rect2(x+w-8,y,8,h))
+  result.append(Rect2(x,y+h-8,w/2-24,8))
+  result.append(Rect2(x+w/2+24,y+h-8,w/2-24,8))
+  result.append(Rect2(x+13,y+13,37,22))
+  result.append(Rect2(x+w-42,y+13,29,23))
+ return result
+
+func draw_house_interiors() -> void:
+ for i in range(BUILDINGS.size()):
+  var a: Rect2=BUILDINGS[i]
+  var inside := is_instance_valid(player) and a.grow(8).has_point(player.position)
+  if not inside:
+   var entrance := Vector2(a.get_center().x,a.end.y-4)
+   draw_rect(Rect2(entrance-Vector2(24,4),Vector2(48,12)),Color("534438"))
+   draw_line(entrance-Vector2(23,4),entrance+Vector2(23,-4),Color("b29a73"),2)
+   continue
+  draw_rect(a,Color("51483c"))
+  for yy in range(int(a.position.y)+9,int(a.end.y)-8,7):
+   draw_line(Vector2(a.position.x+8,yy),Vector2(a.end.x-8,yy),Color("40382f"))
+  for wall in house_obstacles():
+   if a.has_point(wall.get_center()):
+    draw_rect(wall,Color("292b29"))
+    draw_line(wall.position,wall.position+Vector2(wall.size.x,0),Color("89765b"),2)
+  var center := a.position+Vector2(a.size.x*0.5,a.size.y*0.55)
+  draw_rect(Rect2(center-Vector2(20,12),Vector2(40,24)),Color(["635048","46534b","655b43","514653"][i]))
+  draw_rect(Rect2(center-Vector2(18,10),Vector2(36,20)),Color("9a805b"),false,1)
+  draw_circle(center,4,Color("d5b77b"))
+  draw_rect(Rect2(a.position+Vector2(15,15),Vector2(33,18)),Color("746956"))
+  draw_rect(Rect2(a.position+Vector2(16,16),Vector2(10,15)),Color("b3a58c"))
+
+func wheel_art(value: int, symbols: bool) -> Texture2D:
+ var path := "res://assets/puzzles/%s_%d.png" % ["symbol" if symbols else "number",value]
+ return load(path) as Texture2D

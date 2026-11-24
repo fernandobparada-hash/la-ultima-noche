@@ -1,0 +1,5 @@
+Alpha 3.1 - escenario renovado
+ground.png repintado a 2x de resolución (2000x1232) con la misma geometría: tablones de madera con vetas y juntas, baldosas con junta, ladrillo en paredes con borde iluminado y sombra proyectada, ventanas con luz sobre el suelo, muebles con volumen (cama, cocina, estantería, mesas, cómoda, alfombras), casas con tejas y chimeneas, calle con adoquines y asfalto agrietado, charcos, bancos, farolas con halo y arbustos más frondosos.
+main.gd: se eliminaron los rectángulos de muebles/paredes/ventanas/vegetación dibujados en _draw (ahora están en la imagen); se mantienen puerta animada, pistas, puntos de puzzle, niebla y trazadores. Las colisiones no cambian.
+Viñeta suave en pantalla (build_vignette).
+Prueba en Godot pendiente.
