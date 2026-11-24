@@ -1,0 +1,1 @@
+Alpha 2.4: encuentros simultáneos al salir, separación y desvíos básicos, daño y velocidad diferenciados, sincronización de impacto con animación, audio sintético provisional, cuatro eventos ambientales y director inicial de tensión. T cambia el enemigo principal. Se conservan los sprites. No se ejecutó Godot; navegación completa y audio definitivo pendientes.

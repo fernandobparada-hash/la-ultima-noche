@@ -8,8 +8,20 @@ const GROUND = preload("res://assets/ground.png")
 const WORLD_W := 1000.0
 const WORLD_H := 616.0
 
+var navigation := AStarGrid2D.new()
+const NAV_STEP := 12.0
+
 var player: NightPlayer
 var enemy: NightEnemy
+var foes: Array[NightEnemy] = []
+var encounter_started := false
+var tension: float = 0.0
+var event_clock: float = 18.0
+var flicker: float = 0.0
+var event_index: int = 0
+var ambience: AudioStreamPlayer
+var effect: AudioStreamPlayer
+
 var ui: Label
 var notice: Label
 var objective: Label
@@ -60,6 +72,7 @@ func _ready() -> void:
  RenderingServer.set_default_clear_color(Color("10161b"))
  scale=Vector2.ONE*WORLD_SCALE
  build_world()
+ rebuild_navigation()
  player = PlayerScript.new()
  player.position = Vector2(170,130)
  add_child(player)
@@ -70,11 +83,13 @@ func _ready() -> void:
  player.hurt.connect(_on_player_hurt)
  enemy = EnemyScript.new()
  enemy.position = Vector2(570,425)
- enemy.points = [Vector2(570,425),Vector2(850,425),Vector2(850,540),Vector2(570,540)]
+ enemy.points = [to_global(Vector2(570,425)),to_global(Vector2(850,425)),to_global(Vector2(850,540)),to_global(Vector2(570,540))]
  enemy.target = player
- enemy.omen.connect(func(message: String): show_message(message,3.0))
+ enemy.omen.connect(_on_omen)
  add_child(enemy)
  enemy.scale=Vector2.ONE/WORLD_SCALE
+ foes.append(enemy)
+ setup_audio()
  build_lighting()
  var fog := FogScript.new()
  add_child(fog)
@@ -86,6 +101,54 @@ func _ready() -> void:
  mobile_controls.respawn_requested.connect(respawn_player)
  player.mobile_input = mobile_controls
  show_message("Despiertas en una casa desconocida. Busca respuestas.",5.0)
+
+func setup_audio() -> void:
+ ambience=AudioStreamPlayer.new()
+ ambience.stream=preload("res://assets/audio/ambiente.wav")
+ ambience.volume_db=-24.0
+ add_child(ambience)
+ ambience.finished.connect(ambience.play)
+ ambience.play()
+ effect=AudioStreamPlayer.new()
+ effect.stream=preload("res://assets/audio/golpe.wav")
+ effect.volume_db=-15.0
+ add_child(effect)
+
+func spawn_encounter() -> void:
+ if encounter_started: return
+ encounter_started=true
+ var positions: Array[Vector2] = [Vector2(840,420),Vector2(920,540),Vector2(630,550)]
+ var kinds: Array[String] = ["Rastrero","Lamentador","Campanero"]
+ for i in range(positions.size()):
+  var foe: NightEnemy = EnemyScript.new()
+  foe.enemy_type=kinds[i]
+  foe.position=positions[i]
+  foe.points=[to_global(positions[i]),to_global(positions[i]+Vector2(-65,-30))]
+  foe.target=player
+  foe.omen.connect(_on_omen)
+  add_child(foe)
+  foe.scale=Vector2.ONE/WORLD_SCALE
+  foes.append(foe)
+
+func _on_omen(message: String) -> void:
+ show_message(message,3.0)
+ flicker=2.0
+
+func update_tension(delta: float) -> void:
+ if game_over or inventory_open: return
+ var pursuing: int = 0
+ for foe in foes:
+  if not foe.defeated and foe.state=="PERSECUCION": pursuing+=1
+ tension=move_toward(tension,clampf(float(pursuing)*0.35+(1.0-player.health/100.0)*0.3,0.0,1.0),delta*0.12)
+ event_clock-=delta
+ flicker=maxf(0.0,flicker-delta)
+ if event_clock<=0.0 and tension<0.45 and event_index<4:
+  var events: Array[String]=["Un eco lejano atraviesa la casa.","La luz vacila por un instante.","Se escucha una campana distante.","El silencio vuelve de repente."]
+  show_message(events[event_index],3.0)
+  event_index+=1
+  flicker=2.5
+  effect.play()
+  event_clock=24.0
 
 func add_obstacle(area: Rect2) -> StaticBody2D:
  var body := StaticBody2D.new()
@@ -106,6 +169,47 @@ func build_world() -> void:
  for area in FURNITURE:
   add_obstacle(area)
  door_body=add_obstacle(Rect2(210,336,55,14))
+
+func rebuild_navigation() -> void:
+ navigation.region=Rect2i(0,0,84,52)
+ navigation.cell_size=Vector2.ONE*NAV_STEP
+ navigation.offset=Vector2.ONE*NAV_STEP*0.5
+ navigation.diagonal_mode=AStarGrid2D.DIAGONAL_MODE_ONLY_IF_NO_OBSTACLES
+ navigation.update()
+ var obstacles: Array = WALLS.duplicate()
+ obstacles.append_array(FURNITURE)
+ if not door_open: obstacles.append(Rect2(210,336,55,14))
+ for y in range(52):
+  for x in range(84):
+   var cell := Vector2i(x,y)
+   var center := navigation.get_point_position(cell)
+   for area: Rect2 in obstacles:
+    if area.grow(10.0).has_point(center):
+     navigation.set_point_solid(cell,true)
+     break
+
+func nearest_nav_cell(pos: Vector2) -> Vector2i:
+ var cell := Vector2i((to_local(pos)/NAV_STEP).floor())
+ var best := Vector2i(-1,-1)
+ var best_distance := INF
+ for y in range(-3,4):
+  for x in range(-3,4):
+   var candidate := cell+Vector2i(x,y)
+   if not navigation.region.has_point(candidate) or navigation.is_point_solid(candidate): continue
+   var distance := to_global(navigation.get_point_position(candidate)).distance_squared_to(pos)
+   if distance<best_distance:
+    best_distance=distance
+    best=candidate
+ return best
+
+func enemy_path(start: Vector2, finish: Vector2) -> PackedVector2Array:
+ var a := nearest_nav_cell(start)
+ var b := nearest_nav_cell(finish)
+ var result := PackedVector2Array()
+ if a.x<0 or b.x<0: return result
+ for point in navigation.get_point_path(a,b):
+  result.append(to_global(point))
+ return result
 
 func make_glow() -> Texture2D:
  var img := Image.create(96,96,false,Image.FORMAT_RGBA8)
@@ -175,13 +279,13 @@ func build_hud() -> void:
  death_label.add_theme_color_override("font_color",Color("e5d4b9"))
  death_panel.add_child(death_label)
  inventory_panel=PanelContainer.new()
- inventory_panel.position=Vector2(160,5)
- inventory_panel.scale=Vector2(0.91,0.91)
+ inventory_panel.position=Vector2(160,8)
+ inventory_panel.scale=Vector2(0.87,0.87)
  inventory_panel.custom_minimum_size=Vector2(702,535)
  inventory_panel.visible=false
  var panel_style := StyleBoxFlat.new()
- panel_style.bg_color=Color("0b0d0c")
- panel_style.border_color=Color("343d35")
+ panel_style.bg_color=Color("111513")
+ panel_style.border_color=Color("80745a")
  panel_style.set_border_width_all(2)
  panel_style.set_corner_radius_all(7)
  panel_style.set_content_margin_all(4)
@@ -230,9 +334,14 @@ func refresh_inventory() -> void:
  if inventory_list==null: return
  var entries := inventory_entries()
  inventory_selection=clampi(inventory_selection,0,maxi(0,entries.size()-1))
+ if inventory_list.selected!=inventory_selection: inventory_list.carrying=false
  inventory_list.set_items(entries,player.weapons[player.weapon_index])
  inventory_list.selected=inventory_selection
- inventory_count_label.text="12 × 6 CASILLAS    ·    CLIC: MOVER    ·    R / CLIC DERECHO: GIRAR"
+ var used := 0
+ for item in inventory_list.placements:
+  var dims := inventory_list.item_size(item)
+  used+=dims.x*dims.y
+ inventory_count_label.text="ESPACIO %d / 72    ·    VIDA %d%%    ·    LINTERNA %d%%" % [used,int(player.health),int(player.flashlight_battery)]
  if not entries.is_empty():
   var item := entries[inventory_selection]
   var descriptions := {
@@ -247,6 +356,7 @@ func refresh_inventory() -> void:
    "Botiquín":"Recupera 35 puntos de vida y se consume al usarlo."
   }
   inventory_description.text=item+"\n"+str(descriptions.get(item,"Objeto de investigación."))
+  inventory_use_button.text="EQUIPAR" if inventory_selection<player.weapons.size() else ("ENCENDER / APAGAR" if item=="Linterna" else "USAR")
   inventory_use_button.disabled=item in ["Carta arrugada","Carta encontrada","Llave antigua"]
  else:
   inventory_description.text="Mochila vacía."
@@ -276,6 +386,7 @@ func use_inventory_selection() -> void:
   player.recharge_flashlight(45.0)
   inventory_items.erase("Batería")
   show_message("Cambiaste la batería de la linterna. +45 %.",2.2)
+ inventory_list.carrying=false
  refresh_inventory()
 
 func respawn_player() -> void:
@@ -284,6 +395,7 @@ func respawn_player() -> void:
 
 func _process(delta: float) -> void:
  world_time+=delta
+ update_tension(delta)
  tracer_lifetime=maxf(0.0,tracer_lifetime-delta)
  if Input.is_action_just_pressed("inventory") and not game_over:
   inventory_open=not inventory_open
@@ -311,32 +423,32 @@ func _process(delta: float) -> void:
   inventory_open=false
   inventory_panel.visible=false
   player.set_physics_process(false)
-  enemy.set_physics_process(false)
+  for foe in foes: foe.set_physics_process(false)
   mobile_controls.set_dead(true)
   death_panel.visible=true
   show_message("La oscuridad te alcanza. " + ("Toca REAPARECER." if mobile_controls.is_mobile else "Pulsa R para reaparecer."),999.0)
  if game_over and Input.is_action_just_pressed("restart"):
   respawn_player()
  var status := "INACTIVO" if enemy.defeated else enemy.state
- ui.text="LA ÚLTIMA NOCHE   /   CAPÍTULO CERO   /   ALPHA 2.3\nVIDA %d   ·   ENERGÍA %d   ·   %s   ·   LINTERNA %s" % [int(player.health),int(player.stamina),(player.weapons[player.weapon_index]+(" · ∞" if player.weapons[player.weapon_index]=="Pistola" else "")),("%d%%" % int(player.flashlight_battery))+ (" ENCENDIDA" if player.light_on else " APAGADA")]
+ ui.text="LA ÚLTIMA NOCHE   /   CAPÍTULO CERO   /   ALPHA 2.4\nVIDA %d   ·   ENERGÍA %d   ·   %s   ·   LINTERNA %s" % [int(player.health),int(player.stamina),(player.weapons[player.weapon_index]+(" · ∞" if player.weapons[player.weapon_index]=="Pistola" else "")),("%d%%" % int(player.flashlight_battery))+ (" ENCENDIDA" if player.light_on else " APAGADA")]
  objective.text="[I] INVENTARIO   [ESPACIO] ESQUIVAR   [T] CAMBIAR ENEMIGO  /  %s" % ["Explora la calle y evita al Errante" if found_exit else ("Abre la puerta de salida" if took_key else "Busca la llave en la cocina")]
  if player.position.x>500.0 and player.position.y>355.0 and not found_exit:
   found_exit=true
+  spawn_encounter()
   show_message("Has salido al barrio residencial. El Errante patrulla la calle.",5.0)
  for i in range(lamps.size()):
-  lamps[i].energy=(0.65 if i<2 else 0.85)*(0.94+0.06*sin(world_time*2.1+float(i)*3.0))
+  lamps[i].energy=(0.65 if i<2 else 0.85)*(0.94+0.06*sin(world_time*2.1+float(i)*3.0))*(0.55+0.45*absf(sin(world_time*19.0)) if flicker>0.0 else 1.0)
  redraw_accum += delta
  if redraw_accum>=0.05:
   redraw_accum=0.0
   queue_redraw()
 
 func _on_player_attack(origin: Vector2,direction: Vector2,reach: float,damage: float) -> void:
- enemy.hear_event(origin,125.0)
- if enemy.receive_attack(origin,direction,reach,damage):
-  if enemy.defeated:
-   show_message(enemy.enemy_type+" fuera de combate.",3.0)
-  else:
-   show_message(enemy.enemy_type+" retrocede.",1.0)
+ for foe in foes:
+  foe.hear_event(origin,125.0)
+  if foe.receive_attack(origin,direction,reach,damage):
+   effect.play()
+   show_message(foe.enemy_type+ (" fuera de combate." if foe.defeated else " retrocede."),1.0)
 
 func _on_gun_fired(origin: Vector2, destination: Vector2, damage: float) -> void:
  # Hitscan: el primer cuerpo sólido (pared o enemigo) detiene el disparo.
@@ -351,14 +463,14 @@ func _on_gun_fired(origin: Vector2, destination: Vector2, damage: float) -> void
   var collider: Object=hit["collider"]
   if collider is NightEnemy:
    var foe := collider as NightEnemy
-   if foe.receive_attack(origin,(tracer_end-origin).normalized(),origin.distance_to(hit["position"])+4.0,damage):
+   if foe.receive_attack(origin,(destination-origin).normalized(),origin.distance_to(hit["position"])+4.0,damage):
     show_message(foe.enemy_type+" recibió el disparo.",1.0)
  tracer_lifetime=0.13
- enemy.hear_event(origin,380.0)
+ for foe in foes: foe.hear_event(origin,380.0)
  queue_redraw()
 
 func _on_player_hurt(_amount: float) -> void:
- show_message("El Errante te ha alcanzado. Aléjate o utiliza una cobertura.",2.0)
+ show_message("Un enemigo te ha alcanzado. Aléjate o utiliza una cobertura.",2.0)
 
 func interact() -> void:
  if player.position.distance_to(Vector2(190,155))<40.0:
@@ -380,6 +492,7 @@ func interact() -> void:
    inventory_items.erase("Llave antigua")
    refresh_inventory()
    door_body.collision_layer=0
+   rebuild_navigation()
    show_message("La cerradura cede. La calle está sumida en la niebla.",4.0)
  else:
   show_message("No hay nada que examinar aquí.",2.0)

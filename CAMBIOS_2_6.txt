@@ -1,0 +1,2 @@
+Alpha 2.6
+Iconos originales de cinco objetos, marco y estado de inventario. Cache de texturas y foco de teclado. IA: recuperación de bloqueo usa velocidad previa a colisión, recalcula rutas al perder acceso directo y cambia puntos de búsqueda inaccesibles. Prueba en Godot pendiente.

@@ -17,12 +17,14 @@ var carrying := false
 var carried_rotation := false
 var equipped := ""
 const CASE_ART = preload("res://assets/inventory_case_frame.png")
+var icon_cache: Dictionary = {}
 var hover_cell := Vector2i(-1,-1)
 
 
 func _ready() -> void:
  custom_minimum_size=Vector2(688,478)
  mouse_filter=Control.MOUSE_FILTER_STOP
+ focus_mode=Control.FOCUS_ALL
 
 func item_size(item: String) -> Vector2i:
  match item:
@@ -46,7 +48,9 @@ func icon_for(item: String) -> Texture2D:
   "Batería":"res://assets/inventory_battery.png"
  }
  var path: String=files.get(item,"")
- return load(path) as Texture2D if not path.is_empty() else null
+ if path.is_empty(): return null
+ if not icon_cache.has(path): icon_cache[path]=load(path)
+ return icon_cache[path] as Texture2D
 
 func footprint(item: String, rotated: bool) -> Vector2i:
  var dims := item_size(item)
@@ -80,7 +84,9 @@ func set_items(items: Array[String], current_weapon: String) -> void:
      break
    if found: break
   if not found: push_warning("Sin espacio para "+item)
- if selected>=entries.size(): selected=-1
+ if selected>=entries.size():
+  selected=-1
+  carrying=false
  queue_redraw()
 
 func cell_rect(x: int,y: int) -> Rect2:
@@ -104,6 +110,9 @@ func _draw() -> void:
    draw_line(r.position,r.position+Vector2(0,r.size.y),Color("353c35"),1.0)
    draw_line(r.position+Vector2(0,r.size.y),r.end,Color("101613"),1.0)
    draw_line(r.position+Vector2(r.size.x,0),r.end,Color("111612"),1.0)
+ var font := ThemeDB.fallback_font
+ draw_string(font,Vector2(46,65),"EQUIPO  /  SUMINISTROS",HORIZONTAL_ALIGNMENT_LEFT,-1,15,Color("d8c5a2"))
+ draw_string(font,Vector2(46,389),"DOBLE SELECCIÓN: MOVER   ·   R: GIRAR",HORIZONTAL_ALIGNMENT_LEFT,-1,12,Color("a9a99a"))
  for i in range(entries.size()):
   var item := entries[i]
   if not placements.has(item): continue
@@ -111,6 +120,7 @@ func _draw() -> void:
   var active := i==selected
   draw_rect(r,Color(0.45,0.42,0.28,0.22) if active else Color(0.17,0.21,0.18,0.28))
   draw_rect(r,Color("d4c18b") if active else Color("4d5b50"),false,2.0 if active else 1.0)
+  draw_rect(Rect2(r.position+Vector2(3,3),r.size-Vector2(6,6)),Color(0.04,0.05,0.04,0.30))
   var tex := icon_for(item)
   if tex!=null:
    var padding := 4.0
@@ -119,7 +129,7 @@ func _draw() -> void:
    var rotated: bool=placements[item]["rotated"]
    var view_size := Vector2(original.y,original.x) if rotated else original
    var ratio: float=minf(available.x/view_size.x,available.y/view_size.y)
-   ratio=minf(ratio,2.5)
+   ratio=minf(ratio,4.0)
    var scaled := original*ratio
    if rotated:
     draw_set_transform(r.get_center(),PI*0.5,Vector2.ONE)
@@ -152,6 +162,7 @@ func _gui_input(event: InputEvent) -> void:
   rotate_selected()
   accept_event()
  if event is InputEventMouseButton and event.pressed:
+  grab_focus()
   var mouse: Vector2 = event.position-TOP
   var gx := int(floor(mouse.x/(CELL+GAP)))
   var gy := int(floor(mouse.y/(CELL+GAP)))
