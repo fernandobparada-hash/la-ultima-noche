@@ -15,7 +15,6 @@ var attack_cooldown := 0.0
 var defeated := false
 var enemy_type := "Errante"
 const TYPES = ["Errante", "Rastrero", "Vigilante", "Lamentador", "Sabueso", "Campanero"]
-const NEW_ART = {"Vigilante":preload("res://assets/vigilante_test.png"),"Lamentador":preload("res://assets/lamentador_test.png"),"Sabueso":preload("res://assets/sabueso_test.png"),"Campanero":preload("res://assets/campanero_test.png")}
 const HP = [95.0,115.0,130.0,85.0,100.0,160.0]
 var special_timer: float = 0.0
 var trail: Array[Vector2] = []
@@ -35,10 +34,30 @@ const RAS_RUN: Texture2D = preload("res://assets/rastrero_anim_run.png")
 const RAS_ATTACK: Texture2D = preload("res://assets/rastrero_anim_attack.png")
 const RAS_HURT: Texture2D = preload("res://assets/rastrero_anim_hurt.png")
 const RAS_DEATH: Texture2D = preload("res://assets/rastrero_anim_death.png")
-const ERR_CELL := Vector2(80,96)
-const RAS_CELL := Vector2(104,72)
-const ERR_ATTACK_TIME := 0.56
-const RAS_ATTACK_TIME := 0.50
+# Datos por enemigo: hojas (idle, walk, run, attack, hurt, death), tamaño de celda, duración del ataque,
+# secuencia de daño, número de cuadros y ritmo de muerte, radio de sombra.
+const FOES = {
+ "Errante": {"idle":ERR_IDLE,"walk":ERR_WALK,"run":ERR_RUN,"attack":ERR_ATTACK,"hurt":ERR_HURTDEATH,"death":ERR_HURTDEATH,
+  "cell":Vector2(80,96),"atk_time":0.56,"atk_frames":4,"hurt_seq":[0,1],"death_frames":4,"death_dt":0.22,"shadow":14.0},
+ "Rastrero": {"idle":RAS_IDLE,"walk":RAS_WALK,"run":RAS_RUN,"attack":RAS_ATTACK,"hurt":RAS_HURT,"death":RAS_DEATH,
+  "cell":Vector2(104,72),"atk_time":0.50,"atk_frames":6,"hurt_seq":[0,1,2,1],"death_frames":6,"death_dt":0.15,"shadow":21.0},
+ "Vigilante": {"idle":preload("res://assets/vigilante_anim_idle.png"),"walk":preload("res://assets/vigilante_anim_walk.png"),
+  "run":preload("res://assets/vigilante_anim_run.png"),"attack":preload("res://assets/vigilante_anim_attack.png"),
+  "hurt":preload("res://assets/vigilante_anim_hurt.png"),"death":preload("res://assets/vigilante_anim_death.png"),
+  "cell":Vector2(150,98),"atk_time":0.50,"atk_frames":6,"hurt_seq":[0,1,2,1],"death_frames":6,"death_dt":0.17,"shadow":15.0},
+ "Lamentador": {"idle":preload("res://assets/lamentador_anim_idle.png"),"walk":preload("res://assets/lamentador_anim_walk.png"),
+  "run":preload("res://assets/lamentador_anim_run.png"),"attack":preload("res://assets/lamentador_anim_attack.png"),
+  "hurt":preload("res://assets/lamentador_anim_hurt.png"),"death":preload("res://assets/lamentador_anim_death.png"),
+  "cell":Vector2(110,85),"atk_time":0.55,"atk_frames":6,"hurt_seq":[0,1,2,1],"death_frames":6,"death_dt":0.17,"shadow":18.0},
+ "Sabueso": {"idle":preload("res://assets/sabueso_anim_idle.png"),"walk":preload("res://assets/sabueso_anim_walk.png"),
+  "run":preload("res://assets/sabueso_anim_run.png"),"attack":preload("res://assets/sabueso_anim_attack.png"),
+  "hurt":preload("res://assets/sabueso_anim_hurt.png"),"death":preload("res://assets/sabueso_anim_death.png"),
+  "cell":Vector2(126,77),"atk_time":0.45,"atk_frames":6,"hurt_seq":[0,1,2,1],"death_frames":6,"death_dt":0.15,"shadow":20.0},
+ "Campanero": {"idle":preload("res://assets/campanero_anim_idle.png"),"walk":preload("res://assets/campanero_anim_walk.png"),
+  "run":preload("res://assets/campanero_anim_run.png"),"attack":preload("res://assets/campanero_anim_attack.png"),
+  "hurt":preload("res://assets/campanero_anim_hurt.png"),"death":preload("res://assets/campanero_anim_death.png"),
+  "cell":Vector2(126,88),"atk_time":0.56,"atk_frames":6,"hurt_seq":[0,1,2,1],"death_frames":6,"death_dt":0.18,"shadow":17.0}
+}
 var attack_anim := 0.0
 var hurt_anim := 0.0
 var death_time := 0.0
@@ -230,7 +249,7 @@ func _physics_process(delta: float) -> void:
    attack_committed=true
    last_direction=global_position.direction_to(target.global_position)
    attack_cooldown=1.7 if enemy_type=="Errante" else 1.3
-   attack_anim=ERR_ATTACK_TIME if enemy_type=="Errante" else RAS_ATTACK_TIME
+   attack_anim=float(FOES[enemy_type]["atk_time"])
  if velocity.length()>3.0:
   last_direction=velocity.normalized()
  # Recuperación si queda atascado contra un obstáculo.
@@ -289,12 +308,9 @@ func has_line_of_sight() -> bool:
  return get_world_2d().direct_space_state.intersect_ray(query).is_empty()
 
 func _draw() -> void:
- if enemy_type not in ["Errante","Rastrero"]:
-  draw_provisional()
-  return
- var is_ras := enemy_type=="Rastrero"
- var cs: Vector2 = RAS_CELL if is_ras else ERR_CELL
- draw_ellipse_shadow(21.0 if is_ras else 14.0)
+ var data: Dictionary = FOES[enemy_type]
+ var cs: Vector2 = data["cell"]
+ draw_ellipse_shadow(float(data["shadow"]))
  var tint := Color("e7c9b9") if hit_flash>0.0 else Color.WHITE
  var tex: Texture2D = null
  var frame := 0
@@ -302,34 +318,22 @@ func _draw() -> void:
  var bob := 0.0
  var sway := 0.0
  if defeated:
-  # Muerte: Errante usa los 4 cuadros de la hoja daño/muerte; Rastrero tiene 6 cuadros propios.
-  if is_ras:
-   tex=RAS_DEATH
-   frame=mini(5,int(death_time/0.15))
-  else:
-   tex=ERR_HURTDEATH
-   frame=mini(3,int(death_time/0.22))
+  tex=data["death"]
+  frame=mini(int(data["death_frames"])-1,int(death_time/float(data["death_dt"])))
   flip=facing_side<0.0
  elif attack_anim>0.0:
-  var total := RAS_ATTACK_TIME if is_ras else ERR_ATTACK_TIME
+  var total := float(data["atk_time"])
   var progress := clampf(1.0-attack_anim/total,0.0,0.999)
-  if is_ras:
-   tex=RAS_ATTACK
-   frame=mini(5,int(progress*6.0))
-  else:
-   tex=ERR_ATTACK
-   frame=mini(3,int(progress*4.0))
+  tex=data["attack"]
+  frame=mini(int(data["atk_frames"])-1,int(progress*float(data["atk_frames"])))
   var to_target := target.global_position-global_position if target!=null else last_direction
   if absf(to_target.x)>4.0: facing_side=1.0 if to_target.x>0.0 else -1.0
   flip=facing_side<0.0
  elif hurt_anim>0.0:
+  var seq: Array = data["hurt_seq"]
   var hp := clampf(1.0-hurt_anim/0.34,0.0,0.999)
-  if is_ras:
-   tex=RAS_HURT
-   frame=int([0,1,2,1][mini(3,int(hp*4.0))])
-  else:
-   tex=ERR_HURTDEATH
-   frame=mini(1,int(hp*2.0))
+  tex=data["hurt"]
+  frame=int(seq[mini(seq.size()-1,int(hp*float(seq.size())))])
   flip=facing_side<0.0
  else:
   var direction_name := "down"
@@ -341,19 +345,17 @@ func _draw() -> void:
   var moving := velocity.length()>5.0
   var running := state=="PERSECUCION"
   var step := int(animation_time*3.0)%4
-  var idle_tex: Texture2D = RAS_IDLE if is_ras else ERR_IDLE
   if direction_name=="left" or direction_name=="right":
    if moving:
-    if is_ras: tex=RAS_RUN if running else RAS_WALK
-    else: tex=ERR_RUN if running else ERR_WALK
+    tex=data["run"] if running else data["walk"]
     frame=step
     flip=direction_name=="left"
    else:
-    tex=idle_tex
+    tex=data["idle"]
     frame=1 if direction_name=="right" else 3
   else:
    # Arriba/abajo: poses de frente y de espalda con balanceo de paso.
-   tex=idle_tex
+   tex=data["idle"]
    frame=0 if direction_name=="down" else 2
    if moving:
     bob=-float(step%2)*(2.0 if running else 1.0)
@@ -364,20 +366,12 @@ func _draw() -> void:
   dest.position.x=roundf(-cs.x*0.5-sway)
  draw_texture_rect_region(tex,dest,Rect2(frame*cs.x,0,cs.x,cs.y),tint)
  if flip: draw_set_transform(Vector2.ZERO,0.0,Vector2.ONE)
+ # Pulso visual de Lamentador/Campanero al emitir su señal.
+ if pulse>0.0:
+  draw_arc(Vector2.ZERO,20.0+(1.0-pulse)*95.0,0.0,TAU,32,Color(0.7,0.65,0.45,pulse*0.6),2.0)
 
 func draw_ellipse_shadow(radius: float = 14.0) -> void:
  if defeated and death_time>0.5: radius*=1.15
  draw_set_transform(Vector2(0,11),0.0,Vector2(1.0,0.32))
  draw_circle(Vector2.ZERO,radius,Color(0.03,0.04,0.05,0.40))
  draw_set_transform(Vector2.ZERO)
-
-func draw_provisional() -> void:
- draw_ellipse_shadow(16.0)
- var tint: Color = Color("c8b3a2") if hit_flash>0.0 else Color.WHITE
- var tex: Texture2D = NEW_ART[enemy_type]
- var step: int = int(animation_time*3.0)%4 if velocity.length()>5.0 else 0
- if attack_anim>0.0: step=2
- if defeated: step=3
- draw_texture_rect_region(tex,Rect2(-32,-64,64,80),Rect2(step*64,0,64,80),tint)
- if pulse>0.0:
-  draw_arc(Vector2.ZERO,20.0+(1.0-pulse)*95.0,0.0,TAU,32,Color(0.7,0.65,0.45,pulse*0.6),2.0)
