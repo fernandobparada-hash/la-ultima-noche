@@ -374,9 +374,13 @@ func _draw() -> void:
  var frame := int(floor(anim_time*fps))%4
  draw_frame=frame
  var sheet: Texture2D=LOCO[anim_state][direction_name]
+ # Linterna detrás del cuerpo de perfil y de espaldas; delante sólo mirando de frente.
+ var flashlight_behind := direction_name!="down"
+ if flashlight_equipped and flashlight_behind:
+  draw_held_flashlight(look,tint)
  draw_texture_rect_region(sheet,dest,Rect2(frame*FRAME_W,0,FRAME_W,FRAME_H),tint)
  draw_held_weapon(look,tint)
- if flashlight_equipped:
+ if flashlight_equipped and not flashlight_behind:
   draw_held_flashlight(look,tint)
 
 func draw_fist(hand: Vector2) -> void:
@@ -405,9 +409,9 @@ func draw_held_weapon(direction: Vector2,tint: Color) -> void:
 func draw_held_flashlight(direction: Vector2,tint: Color) -> void:
  # La mano contraria sostiene la linterna; orientación coherente con el cono de luz.
  var side := get_direction_name(direction)
- var grip := Vector2(-18,-33) if side!="left" else Vector2(18,-33)
+ # De perfil la sostiene la mano lejana, adelantada a la altura del pecho: el mango queda detrás del cuerpo y la cabeza asoma por delante.
+ var grip := Vector2(2,-23) if side!="left" else Vector2(-3,-23)
  if side=="up": grip=Vector2(17,-38)
- if side=="right": grip=Vector2(-15,-35)
  if side=="down" or side=="up":
   var ftable: Array = HAND_F[anim_state][side]
   grip=ftable[draw_frame%4]
@@ -419,7 +423,8 @@ func draw_held_flashlight(direction: Vector2,tint: Color) -> void:
  grip=grip.round()
  var rotation := direction.angle()
  # La textura está dibujada horizontalmente, con empuñadura a la izquierda.
- draw_set_transform(grip,rotation,Vector2(0.34,0.34))
+ # Espejo al mirar a la izquierda: primero escala (en la textura), luego gira; así también apunta bien en diagonal.
+ draw_set_transform_matrix(Transform2D(rotation,grip)*Transform2D.IDENTITY.scaled(Vector2(0.34,-0.34 if direction.x<-0.01 else 0.34)))
  draw_texture(FLASHLIGHT_SPRITE,Vector2(-20,-28),tint)
  flash_hand = grip+direction.normalized()*28.0
  draw_set_transform(Vector2.ZERO,0.0,Vector2.ONE)
