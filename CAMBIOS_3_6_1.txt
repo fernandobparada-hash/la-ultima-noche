@@ -1,0 +1,1 @@
+Renovación visual: tema común, contraste, iluminación, textura del distrito este, mobiliario, mapa, inventario y selectores. Botón diario separado del mapa. Sprites de personajes intactos. Sin prueba de ejecución Godot.

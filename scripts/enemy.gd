@@ -19,6 +19,8 @@ const HP = [95.0,115.0,130.0,85.0,100.0,160.0]
 var special_timer: float = 0.0
 var trail: Array[Vector2] = []
 var trail_timer: float = 0.0
+var scan_angle: float = 0.0
+var stuck_retries: int = 0
 var pulse: float = 0.0
 signal omen(message: String)
 
@@ -206,6 +208,10 @@ func _physics_process(delta: float) -> void:
  if ai_tick<=0.0:
   ai_tick=0.10
   var hearing := 45.0 if target.crouched else (180.0 if target.run_state else 105.0)
+  if enemy_type=="Sabueso": hearing*=1.3
+  if enemy_type=="Vigilante" and state=="PATRULLA":
+   scan_angle+=0.12
+   last_direction=Vector2.DOWN.rotated(scan_angle)
   can_hear = distance<hearing and target.velocity.length()>15.0
   if can_hear and not has_line_of_sight(): can_hear=distance<hearing*0.45
   if can_hear:
@@ -216,7 +222,7 @@ func _physics_process(delta: float) -> void:
   var toward := (target.global_position-global_position).normalized()
   var in_cone := last_direction.dot(toward)>-0.25 or distance<35.0
   can_see = distance<sight_range and in_cone and has_line_of_sight()
- if enemy_type=="Vigilante" and state=="PATRULLA" and target.velocity.length()<12.0:
+ if enemy_type=="Vigilante" and state=="PATRULLA" and target.velocity.length()<12.0 and not target.light_on and distance>35.0:
   can_see=false
  if enemy_type=="Sabueso" and not can_see and not trail.is_empty():
   if global_position.distance_to(trail[0])<20.0: trail.pop_front()
@@ -265,7 +271,7 @@ func _physics_process(delta: float) -> void:
   if global_position.distance_to(destination)<16.0:
    if patrol_wait<=0.0:
     point_index=(point_index+1)%points.size()
-    patrol_wait=0.65
+    patrol_wait=randf_range(0.5,1.5) if enemy_type=="Errante" else 0.65
   if patrol_wait>0.0: destination=global_position
  elif state=="PERSECUCION":
   destination=last_seen
@@ -303,6 +309,8 @@ func _physics_process(delta: float) -> void:
    pulse=1.0
    play_voice()
    omen.emit("Una campanada rompe el silencio.")
+   for node in get_tree().get_nodes_in_group("night_enemies"):
+    if node!=self and node is NightEnemy: node.hear_event(global_position,300.0)
  if windup>0.0:
   windup-=delta
   velocity=Vector2.ZERO
@@ -346,9 +354,14 @@ func _physics_process(delta: float) -> void:
    route_clock=0.0
    route.clear()
    detour_time=0.0
+   stuck_retries+=1
+   if state=="PATRULLA" and points.size()>0 and stuck_retries>=2:
+    point_index=(point_index+1)%points.size()
+    stuck_retries=0
    blocked_timer=0.0
  else:
   blocked_timer=0.0
+  if global_position.distance_to(previous_position)>1.0: stuck_retries=0
  queue_redraw()
 
 func navigation_waypoint(destination: Vector2) -> Vector2:

@@ -1,0 +1,1 @@
+Alpha 3.4: cuatro interiores diferenciados, ocho muebles examinables con E, cuatro consumibles únicos adicionales, registro persistente de muebles examinados. Conserva los puntos de retorno y acertijos. Pruebas en Godot pendientes.

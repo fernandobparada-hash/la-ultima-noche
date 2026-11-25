@@ -5,8 +5,22 @@ const EnemyScript = preload("res://scripts/enemy.gd")
 const MobileControlsScript = preload("res://scripts/mobile_controls.gd")
 const FogScript = preload("res://scripts/fog.gd")
 const GROUND = preload("res://assets/ground.png")
-const WORLD_W := 1000.0
+const INTERIORS = [preload("res://assets/interior_0.png"),preload("res://assets/interior_1.png"),preload("res://assets/interior_2.png"),preload("res://assets/interior_3.png"),preload("res://assets/interior_4.png"),preload("res://assets/interior_5.png"),preload("res://assets/interior_6.png"),preload("res://assets/interior_7.png"),preload("res://assets/interior_8.png")]
+const WORLD_W := 1600.0
 const WORLD_H := 616.0
+
+const WeatherScript = preload("res://scripts/weather.gd")
+var weather: Node2D
+var journal_panel: PanelContainer
+var journal_text: Label
+var journal_open := false
+var memories: Dictionary = {}
+var memory_open := false
+var memory_panel: ColorRect
+var memory_title: Label
+var memory_text: Label
+const MEMORY_TITLES = ["La estación", "El expediente 07", "La campana", "La promesa"]
+const MEMORY_LINES = ["Daniel: ¿Vas a volver por mí?\n\nUna estación vacía. Reconoces tu propia voz, pero no recuerdas la respuesta.", "Registro 07 / Proyecto Umbral\n\nEl ensayo permite recuperar recuerdos incompletos. El sujeto insiste en regresar a un día concreto. Su firma resulta familiar.", "Una campana suena detrás de una puerta.\n\nDaniel: Dijiste que solo serían unos minutos.\n\nLa imagen se desvanece antes de que puedas abrirla.", "Una nota escrita con tu letra: Si vuelvo a olvidar, busca a Daniel. No confundas lo que recuerdas con lo que ocurrió."]
 
 var navigation := AStarGrid2D.new()
 const NAV_STEP := 12.0
@@ -41,9 +55,14 @@ var map_status: Label
 var map_box: VBoxContainer
 var puzzle_box: VBoxContainer
 var active_puzzle := -1
-var solved: Array[bool] = [false,false]
+var puzzle_attempts := 0
+const EXTRA_TITLES = ["Reloj detenido · MEDIA", "Archivo Umbral · DIFÍCIL", "Circuito de jardín · DIFÍCIL", "Sello del viajero · EXPERTO"]
+const EXTRA_HINTS = ["El reloj marca una hora después de las 2. Los minutos son la mitad de una hora. Introduce HMM.", "Tres cifras distintas. La primera es el doble de la última. La segunda es la suma de las otras dos. Las tres suman 12.", "Cada disco tiene dos estados. Activa los discos 1 y 3; el segundo debe quedar apagado. Cada pulsación cambia también el vecino de la derecha.", "El archivo y el reloj deben estar resueltos. El sello usa las cifras del archivo en orden inverso, sumando uno a cada cifra (9 vuelve a 0)."]
+const EXTRA_CODES = [[3,3,0],[4,6,2],[1,0,1],[3,7,5]]
+
+var solved: Array[bool] = [false,false,false,false,false,false]
 var explored: Dictionary = {}
-const PUZZLE_POINTS := [Vector2(430,285),Vector2(760,405)]
+const PUZZLE_POINTS := [Vector2(430,285),Vector2(760,405),Vector2(627,118),Vector2(867,128),Vector2(672,285),Vector2(882,295)]
 var paper_reader: PanelContainer
 var paper_text: Label
 var took_key := false
@@ -56,9 +75,13 @@ var door_body: StaticBody2D
 var game_over := false
 var checkpoint := Vector2(170,130)
 var visited_houses: Dictionary = {}
+var searched_furniture: Dictionary = {}
+const ROOM_COLORS = ["66513d","4c514a","62634b","544651","56615e","635345","4c565e","64604b","495343"]
+const FURNITURE_NAMES = [["Cama", "Reloj de pared"], ["Estantería", "Escritorio"], ["Banco de jardín", "Armario"], ["Sofá", "Maleta"],["Camilla","Recepción"],["Banco","Atril"],["Archivador","Escritorio"],["Estante","Mostrador"],["Monumento","Banco"]]
+const FURNITURE_NOTES = [["La manta está cubierta de polvo.", "El reloj se detuvo a las tres y media."], ["Los libros están ordenados por fecha.", "Hay referencias al Proyecto Umbral."], ["Las macetas llevan semanas secas.", "Un dibujo muestra tres luces."], ["Una fotografía muestra una estación vacía.", "La etiqueta de la maleta dice Daniel."],["La sala está vacía.","El registro menciona un traslado."],["El banco está cubierto de polvo.","El atril conserva una página en blanco."],["Los expedientes están incompletos.","Hay un mapa antiguo del barrio."],["Quedan cajas vacías.","El reloj de caja está detenido."],["Las inscripciones están desgastadas.","Hay flores secas junto al banco."]]
 var death_layer: CanvasLayer
-const HOUSE_NAMES := ["Casa del reloj", "Casa de la biblioteca", "Casa del jardín", "Casa del viajero"]
-const HOUSE_LOOT := ["Batería", "Botiquín", "Batería", "Botiquín"]
+const HOUSE_NAMES := ["Casa del reloj", "Casa de la biblioteca", "Casa del jardín", "Casa del viajero","Hospital","Iglesia","Comisaría","Supermercado","Cementerio"]
+const HOUSE_LOOT := ["Batería", "Botiquín", "Batería", "Botiquín","Botiquín","Batería","Batería","Botiquín","Batería"]
 var world_time := 0.0
 var redraw_accum := 0.0
 var lamps: Array[PointLight2D] = []
@@ -83,13 +106,13 @@ var shot_impact := false
 const WORLD_SCALE := 1.55
 
 const WALLS := [
- Rect2(0,0,1000,16),Rect2(0,600,1000,16),Rect2(0,0,16,616),Rect2(984,0,16,616),
+ Rect2(0,0,1600,16),Rect2(0,600,1600,16),Rect2(0,0,16,616),Rect2(1584,0,16,616),
  Rect2(40,40,430,14),Rect2(40,40,14,310),Rect2(456,40,14,310),
  Rect2(40,336,170,14),Rect2(265,336,205,14),
  Rect2(40,205,175,12),Rect2(270,205,200,12),
  Rect2(250,40,12,85),Rect2(250,175,12,42)
 ]
-const BUILDINGS := [Rect2(550,38,155,100),Rect2(790,48,154,100),Rect2(600,205,145,100),Rect2(810,215,145,100)]
+const BUILDINGS := [Rect2(550,38,155,100),Rect2(790,48,154,100),Rect2(600,205,145,100),Rect2(810,215,145,100),Rect2(1050,45,210,125),Rect2(1330,45,210,125),Rect2(1050,245,210,125),Rect2(1330,245,210,125),Rect2(1190,450,210,110)]
 const FURNITURE := [
  Rect2(90,85,75,32),Rect2(310,100,72,28),Rect2(105,250,80,26),
  Rect2(320,252,85,25),Rect2(530,375,90,20),Rect2(700,475,90,20)
@@ -122,6 +145,10 @@ func _ready() -> void:
  add_child(fog)
  build_hud()
  build_exploration_ui()
+ weather=WeatherScript.new()
+ add_child(weather)
+ build_journal()
+ build_memory_ui()
  mobile_controls = MobileControlsScript.new()
  add_child(mobile_controls)
  # CanvasLayer mantiene HUD y controles a escala de pantalla.
@@ -163,20 +190,20 @@ func _on_omen(message: String) -> void:
  flicker=2.0
 
 func update_tension(delta: float) -> void:
- if game_over or inventory_open or exploration_panel.visible: return
+ if game_over or inventory_open or exploration_panel.visible or memory_open: return
  var pursuing: int = 0
  for foe in foes:
   if not foe.defeated and foe.state=="PERSECUCION": pursuing+=1
  tension=move_toward(tension,clampf(float(pursuing)*0.35+(1.0-player.health/100.0)*0.3,0.0,1.0),delta*0.12)
  event_clock-=delta
  flicker=maxf(0.0,flicker-delta)
- if event_clock<=0.0 and tension<0.45 and event_index<4:
-  var events: Array[String]=["Un eco lejano atraviesa la casa.","La luz vacila por un instante.","Se escucha una campana distante.","El silencio vuelve de repente."]
+ if event_clock<=0.0 and tension<0.45 and event_index<8:
+  var events: Array[String]=["Un eco lejano atraviesa la casa.","La luz vacila por un instante.","Se escucha una campana distante.","El silencio vuelve de repente.","Una radio olvidada emite estática.","Una voz pronuncia el nombre de Daniel.","Algo parece moverse detrás de una ventana.","El viento arrastra un papel por la calle."]
   show_message(events[event_index],3.0)
   event_index+=1
   flicker=2.5
   effect.play()
-  event_clock=24.0
+  event_clock=randf_range(22.0,38.0)
 
 func add_obstacle(area: Rect2) -> StaticBody2D:
  var body := StaticBody2D.new()
@@ -201,7 +228,7 @@ func build_world() -> void:
  door_body=add_obstacle(Rect2(210,336,55,14))
 
 func rebuild_navigation() -> void:
- navigation.region=Rect2i(0,0,84,52)
+ navigation.region=Rect2i(0,0,134,52)
  navigation.cell_size=Vector2.ONE*NAV_STEP
  navigation.offset=Vector2.ONE*NAV_STEP*0.5
  navigation.diagonal_mode=AStarGrid2D.DIAGONAL_MODE_ONLY_IF_NO_OBSTACLES
@@ -211,7 +238,7 @@ func rebuild_navigation() -> void:
  obstacles.append_array(house_obstacles())
  if not door_open: obstacles.append(Rect2(210,336,55,14))
  for y in range(52):
-  for x in range(84):
+  for x in range(134):
    var cell := Vector2i(x,y)
    var center := navigation.get_point_position(cell)
    for area: Rect2 in obstacles:
@@ -256,7 +283,7 @@ func build_vignette() -> void:
  for y in range(90):
   for x in range(160):
    var d := Vector2((x-79.5)/79.5,(y-44.5)/44.5).length()
-   img.set_pixel(x,y,Color(0.02,0.03,0.04,clampf((d-0.55)*0.62,0.0,0.62)))
+   img.set_pixel(x,y,Color(0.02,0.03,0.04,clampf((d-0.65)*0.52,0.0,0.48)))
  var layer := CanvasLayer.new()
  layer.layer=1
  var rect := TextureRect.new()
@@ -271,15 +298,15 @@ func build_vignette() -> void:
 func build_lighting() -> void:
  build_vignette()
  var shade := CanvasModulate.new()
- shade.color=Color("535963")
+ shade.color=Color("68717a")
  add_child(shade)
  var glow := make_glow()
- for location in [Vector2(185,158),Vector2(350,175),Vector2(590,405),Vector2(845,405)]:
+ for location in [Vector2(185,158),Vector2(350,175),Vector2(590,405),Vector2(845,405),Vector2(1290,205),Vector2(1290,405),Vector2(1450,470)]:
   var lamp := PointLight2D.new()
   lamp.texture=glow
   lamp.texture_scale=1.7 if location.x<500.0 else 2.3
   lamp.energy=0.65 if location.x<500.0 else 0.85
-  lamp.color=Color("e7c38b")
+  lamp.color=Color("f2c78e")
   lamp.position=location
   add_child(lamp)
   lamps.append(lamp)
@@ -497,6 +524,7 @@ func _process(delta: float) -> void:
  if game_over:
   if Input.is_action_just_pressed("restart"): respawn_player()
   return
+ if journal_open or memory_open: return
  world_time+=delta
  if door_opening:
   door_progress=minf(1.0,door_progress+delta/0.85)
@@ -551,7 +579,7 @@ func _process(delta: float) -> void:
  if game_over and Input.is_action_just_pressed("restart"):
   respawn_player()
  var status := "INACTIVO" if enemy.defeated else enemy.state
- ui.text="LA ÚLTIMA NOCHE   /   CAPÍTULO CERO   /   ALPHA 3.0\nVIDA %d   ·   ENERGÍA %d   ·   %s   ·   LINTERNA %s" % [int(player.health),int(player.stamina),(player.weapons[player.weapon_index]+(" · ∞" if player.weapons[player.weapon_index]=="Pistola" else "")),("%d%%" % int(player.flashlight_battery))+ (" ENCENDIDA" if player.light_on else " APAGADA")]
+ ui.text="LA ÚLTIMA NOCHE   /   CAPÍTULO CERO   /   ALPHA 3.6.1\nVIDA %d   ·   ENERGÍA %d   ·   %s   ·   LINTERNA %s" % [int(player.health),int(player.stamina),(player.weapons[player.weapon_index]+(" · ∞" if player.weapons[player.weapon_index]=="Pistola" else "")),("%d%%" % int(player.flashlight_battery))+ (" ENCENDIDA" if player.light_on else " APAGADA")]
  objective.text="[I] INVENTARIO   [ESPACIO] ESQUIVAR   [M] MAPA  /  %s" % ["Explora la calle y evita al Errante" if found_exit else ("Abre la puerta de salida" if took_key else "Busca la llave en la cocina")]
  if player.position.x>500.0 and player.position.y>355.0 and not found_exit:
   found_exit=true
@@ -595,6 +623,29 @@ func _on_player_hurt(_amount: float) -> void:
 
 func interact() -> void:
  for i in range(BUILDINGS.size()):
+  var room: Rect2 = BUILDINGS[i]
+  if not room.has_point(player.position): continue
+  for j in range(2):
+   var furniture: Rect2 = room_furniture(i,j)
+   if furniture.grow(12).has_point(player.position):
+    var key := "%d:%d" % [i,j]
+    var message: String = FURNITURE_NAMES[i][j]+": "+FURNITURE_NOTES[i][j]
+    if j==0 and not searched_furniture.has(key):
+     inventory_items.append("Batería" if i%2==0 else "Botiquín")
+     refresh_inventory()
+     message += " Encontraste un consumible."
+    searched_furniture[key]=true
+    show_message(message,5.0)
+    if j==1:
+     var memory_id: int = {3:0,6:1,5:2,4:3}.get(i,-1)
+     if memory_id>=0 and not memories.has(memory_id): open_memory(memory_id)
+    return
+ for i in range(2,PUZZLE_POINTS.size()):
+  if player.position.distance_to(PUZZLE_POINTS[i])<15.0:
+   if solved[i]: show_message("Mecanismo resuelto.",2.0)
+   else: open_puzzle(i)
+   return
+ for i in range(BUILDINGS.size()):
   var area: Rect2=BUILDINGS[i]
   var spot := area.position+Vector2(area.size.x*0.5,area.size.y*0.55)
   if player.position.distance_to(spot)<30.0:
@@ -603,8 +654,11 @@ func interact() -> void:
     visited_houses[i]=true
     inventory_items.append(HOUSE_LOOT[i])
     refresh_inventory()
+    save_progress()
     show_message(HOUSE_NAMES[i]+": encontraste "+HOUSE_LOOT[i]+". Punto guardado.",4.0)
-   else: show_message("Punto de retorno actualizado.",2.0)
+   else:
+    save_progress()
+    show_message("Punto de retorno actualizado.",2.0)
    return
  for i in range(PUZZLE_POINTS.size()):
   if player.position.distance_to(PUZZLE_POINTS[i])<30.0:
@@ -671,6 +725,7 @@ func _draw() -> void:
   var point: Vector2 = PUZZLE_POINTS[i]
   draw_rect(Rect2(point-Vector2(9,7),Vector2(18,14)),Color("41382e"))
   draw_rect(Rect2(point-Vector2(8,6),Vector2(16,12)),Color("a08b60"),false,1.0)
+  if i>=2 and not BUILDINGS[i-2].has_point(player.position): continue
   draw_circle(point,3.0,Color("73917b") if solved[i] else Color("d1b578"))
  # Small fog wisps, deliberately subtle.
  for i in range(7):
@@ -709,7 +764,7 @@ func build_exploration_ui() -> void:
  map_box=VBoxContainer.new()
  layout.add_child(map_box)
  var heading := Label.new()
- heading.text="PLANO DEL BARRIO RESIDENCIAL"
+ heading.text="PLANO DEL PUEBLO  /  UMBRAL"
  heading.add_theme_color_override("font_color",Color("493322"))
  heading.add_theme_font_size_override("font_size",24)
  map_box.add_child(heading)
@@ -750,6 +805,7 @@ func build_exploration_ui() -> void:
  puzzle_submit.pressed.connect(check_puzzle)
  puzzle_box.add_child(puzzle_submit)
  puzzle_feedback=Label.new()
+ puzzle_feedback.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
  puzzle_feedback.add_theme_color_override("font_color",Color("493322"))
  puzzle_box.add_child(puzzle_feedback)
  var close := Button.new()
@@ -763,28 +819,31 @@ func reveal_map() -> void:
  for y in range(-1,2):
   for x in range(-1,2):
    var c := cell+Vector2i(x,y)
-   if c.x>=0 and c.x<25 and c.y>=0 and c.y<16: explored[c]=true
+   if c.x>=0 and c.x<40 and c.y>=0 and c.y<16: explored[c]=true
 
 func open_map() -> void:
  active_puzzle=-1
  map_box.show()
  puzzle_box.hide()
- map_status.text="● Tú    ·    ? Mecanismo    ·    ✓ Resuelto    |    %d / 2" % (int(solved[0])+int(solved[1]))
+ map_status.text="● Tú    ·    ? Mecanismo    ·    ✓ Resuelto    |    %d / 6" % (solved.count(true))
  exploration_panel.show()
  player.inventory_locked=true
  map_view.queue_redraw()
 
 func draw_exploration_map() -> void:
- var factor := Vector2(0.60,0.55)
+ var factor := Vector2(0.375,0.55)
  map_view.draw_texture_rect(preload("res://assets/document_paper.png"),Rect2(0,0,600,339),false)
  map_view.draw_rect(Rect2(0,0,600,339),Color("72553b"),false,2.0)
- for x in range(0,600,24):
+ map_view.draw_rect(Rect2(4,4,592,331),Color("96724e"),false,1.0)
+ for road: Rect2 in [Rect2(480,405,500,55),Rect2(985,170,600,65),Rect2(985,370,600,65),Rect2(1270,16,48,584)]:
+  map_view.draw_rect(Rect2(road.position*factor,road.size*factor),Color("b5a080"))
+ for x in range(0,600,15):
   map_view.draw_line(Vector2(x,0),Vector2(x,339),Color(0.35,0.23,0.12,0.13))
  for y in range(0,339,22):
   map_view.draw_line(Vector2(0,y),Vector2(600,y),Color(0.35,0.23,0.12,0.13))
  for area: Rect2 in BUILDINGS:
   var roof := Rect2(area.position*factor,area.size*factor)
-  map_view.draw_rect(roof,Color("9b7955"))
+  map_view.draw_rect(roof,Color("ad8962"))
   map_view.draw_rect(roof,Color("60462e"),false,2.0)
   map_view.draw_line(Vector2(roof.get_center().x,roof.position.y),Vector2(roof.get_center().x,roof.end.y),Color("60462e"),2.0)
   for yy in range(int(roof.position.y)+5,int(roof.end.y),5):
@@ -792,9 +851,9 @@ func draw_exploration_map() -> void:
  for area: Rect2 in WALLS:
   map_view.draw_rect(Rect2(area.position*factor,area.size*factor),Color("493d30"))
  for y in range(16):
-  for x in range(25):
+  for x in range(40):
    if not explored.has(Vector2i(x,y)):
-    map_view.draw_rect(Rect2(Vector2(x,y)*40.0*factor,Vector2(40, minf(40.0,616.0-y*40.0))*factor),Color("65594b"))
+    map_view.draw_rect(Rect2(Vector2(x,y)*40.0*factor,Vector2(40, minf(40.0,616.0-y*40.0))*factor),Color("514b40"))
  for i in range(PUZZLE_POINTS.size()):
   var point: Vector2=PUZZLE_POINTS[i]
   if explored.has(Vector2i((point/40.0).floor())):
@@ -804,6 +863,10 @@ func draw_exploration_map() -> void:
  map_view.draw_arc(compass,16,0,TAU,32,Color("63472d"),1.5)
  map_view.draw_colored_polygon(PackedVector2Array([compass+Vector2(0,-13),compass+Vector2(-5,5),compass+Vector2(5,5)]),Color("74402e"))
  map_view.draw_string(ThemeDB.fallback_font,compass+Vector2(-4,-18),"N",HORIZONTAL_ALIGNMENT_LEFT,-1,12,Color("493322"))
+ for i in range(BUILDINGS.size()):
+  var center: Vector2=BUILDINGS[i].get_center()
+  if explored.has(Vector2i((center/40.0).floor())):
+   map_view.draw_string(ThemeDB.fallback_font,center*factor+Vector2(-30,0),["RELOJ","ARCHIVO","JARDÍN","VIAJERO","HOSPITAL","IGLESIA","POLICÍA","MERCADO","CEMENTERIO"][i],HORIZONTAL_ALIGNMENT_LEFT,-1,9,Color("392d23"))
  map_view.draw_circle(player.position*factor,5.0,Color("e8dcb7"))
  map_view.draw_arc(player.position*factor,6.0,0.0,TAU,16,Color("493322"),2.0)
 
@@ -813,6 +876,10 @@ func open_puzzle(index: int) -> void:
  puzzle_box.show()
  puzzle_title.text="Armario de símbolos" if index==0 else "Caja del barrio"
  puzzle_hint.text="Tres símbolos abren el armario. Busca la carta de la casa. Pulsa los discos para cambiar los símbolos." if index==0 else ("La nota del armario dice: cuatro estaciones, dos lunas, siete campanas. Gira las tres ruedas numéricas." if solved[0] else "Hay una nota con la combinación en el armario de la casa.")
+ if index>=2:
+  puzzle_title.text=EXTRA_TITLES[index-2]
+  puzzle_hint.text=EXTRA_HINTS[index-2]
+ puzzle_attempts=0
  wheel_values=[0,0,0]
  puzzle_submit.disabled=false
  puzzle_mechanism.add_theme_stylebox_override("panel", mechanism_style(index))
@@ -828,7 +895,10 @@ func check_puzzle() -> void:
   answer="%s %s %s" % [SYMBOLS[wheel_values[0]].to_lower(),SYMBOLS[wheel_values[1]].to_lower(),SYMBOLS[wheel_values[2]].to_lower()]
  else:
   answer="%d%d%d" % wheel_values
- if (active_puzzle==0 and answer=="luna sol estrella") or (active_puzzle==1 and solved[0] and answer=="427"):
+ if active_puzzle>=2 and active_puzzle==5 and not (solved[2] and solved[3]):
+  puzzle_feedback.text="Primero resuelve el reloj y el archivo."
+  return
+ if (active_puzzle>=2 and wheel_values==EXTRA_CODES[active_puzzle-2]) or (active_puzzle==0 and answer=="luna sol estrella") or (active_puzzle==1 and solved[0] and answer=="427"):
   solved[active_puzzle]=true
   puzzle_submit.disabled=true
   update_wheels()
@@ -838,11 +908,16 @@ func check_puzzle() -> void:
   if active_puzzle==0:
    puzzle_feedback.text="Abierto. Nota: cuatro estaciones, dos lunas, siete campanas."
   else:
-   inventory_items.append("Batería")
+   var reward := "Botiquín" if active_puzzle>=3 else "Batería"
+   inventory_items.append(reward)
    refresh_inventory()
-   puzzle_feedback.text="Abierto. Encontraste una batería de repuesto."
+   puzzle_feedback.text="Abierto. Encontraste: "+reward
+  save_progress()
  else:
+  puzzle_attempts+=1
   puzzle_feedback.text="No encaja. Revisa las pistas."
+  if puzzle_attempts>=3 and active_puzzle>=2:
+   puzzle_feedback.text=["Formato: una cifra de hora y dos de minutos.","La última cifra es menor que tres.","Prueba el disco central y observa el cambio.","Invierte primero; después suma uno."][active_puzzle-2]
  queue_redraw()
 
 func close_exploration() -> void:
@@ -864,7 +939,11 @@ func mechanism_style(index: int) -> StyleBoxFlat:
 
 func turn_wheel(index: int) -> void:
  if active_puzzle<0 or solved[active_puzzle]: return
- wheel_values[index]=(wheel_values[index]+1)%(SYMBOLS.size() if active_puzzle==0 else 10)
+ if active_puzzle==4:
+  wheel_values[index]=1-wheel_values[index]
+  if index<2: wheel_values[index+1]=1-wheel_values[index+1]
+ else:
+  wheel_values[index]=(wheel_values[index]+1)%(SYMBOLS.size() if active_puzzle==0 else 10)
  update_wheels()
  var wheel := puzzle_wheels[index]
  wheel.modulate=Color("e5c58e")
@@ -875,6 +954,9 @@ func update_wheels() -> void:
   var wheel := puzzle_wheels[i]
   wheel.text=""
   wheel.icon=wheel_art(wheel_values[i],active_puzzle==0)
+  if active_puzzle==4:
+   wheel.icon=null
+   wheel.text="ENCENDIDO" if wheel_values[i]==1 else "APAGADO"
   wheel.expand_icon=true
   wheel.icon_alignment=HORIZONTAL_ALIGNMENT_CENTER
   wheel.tooltip_text=SYMBOLS[wheel_values[i]] if active_puzzle==0 else str(wheel_values[i])
@@ -888,6 +970,7 @@ func update_wheels() -> void:
    style.set_corner_radius_all(40 if active_puzzle==0 else 9)
    wheel.add_theme_stylebox_override(state,style)
   wheel.add_theme_color_override("font_color",Color("e7d2a8"))
+  wheel.add_theme_color_override("font_hover_color",Color("fff0c9"))
 
 
 func house_obstacles() -> Array[Rect2]:
@@ -902,9 +985,16 @@ func house_obstacles() -> Array[Rect2]:
   result.append(Rect2(x+w-8,y,8,h))
   result.append(Rect2(x,y+h-8,w/2-24,8))
   result.append(Rect2(x+w/2+24,y+h-8,w/2-24,8))
-  result.append(Rect2(x+13,y+13,37,22))
-  result.append(Rect2(x+w-42,y+13,29,23))
+  var index := BUILDINGS.find(area)
+  for j in range(2):
+   result.append(room_furniture(index,j))
  return result
+
+func room_furniture(index: int, slot: int) -> Rect2:
+ var a: Rect2 = BUILDINGS[index]
+ if slot==0:
+  return Rect2(a.position+Vector2(13,13),Vector2(36,24 if index!=1 else 16))
+ return Rect2(a.position+Vector2(a.size.x-43,13),Vector2(30,22))
 
 func draw_house_interiors() -> void:
  for i in range(BUILDINGS.size()):
@@ -914,21 +1004,187 @@ func draw_house_interiors() -> void:
    var entrance := Vector2(a.get_center().x,a.end.y-4)
    draw_rect(Rect2(entrance-Vector2(24,4),Vector2(48,12)),Color("534438"))
    draw_line(entrance-Vector2(23,4),entrance+Vector2(23,-4),Color("b29a73"),2)
+   if i>=4:
+    draw_string(ThemeDB.fallback_font,Vector2(a.position.x+8,a.end.y+19),HOUSE_NAMES[i],HORIZONTAL_ALIGNMENT_LEFT,-1,12,Color("d1c09b"))
    continue
-  draw_rect(a,Color("51483c"))
-  for yy in range(int(a.position.y)+9,int(a.end.y)-8,7):
-   draw_line(Vector2(a.position.x+8,yy),Vector2(a.end.x-8,yy),Color("40382f"))
-  for wall in house_obstacles():
-   if a.has_point(wall.get_center()):
-    draw_rect(wall,Color("292b29"))
-    draw_line(wall.position,wall.position+Vector2(wall.size.x,0),Color("89765b"),2)
+  # Interior pintado en interior_N.png (suelo, paredes, ventanas, alfombra y muebles en sus posiciones de colisión).
+  draw_texture_rect(INTERIORS[i],a,false)
+  for j in range(2):
+   var r := room_furniture(i,j)
+   if not searched_furniture.has("%d:%d" % [i,j]):
+    var pulse := 2.2+sin(world_time*3.0+float(j))*0.6
+    draw_circle(r.get_center(),pulse+1.6,Color(0.84,0.75,0.51,0.25))
+    draw_circle(r.get_center(),pulse,Color("d7bf83"))
   var center := a.position+Vector2(a.size.x*0.5,a.size.y*0.55)
-  draw_rect(Rect2(center-Vector2(20,12),Vector2(40,24)),Color(["635048","46534b","655b43","514653"][i]))
-  draw_rect(Rect2(center-Vector2(18,10),Vector2(36,20)),Color("9a805b"),false,1)
-  draw_circle(center,4,Color("d5b77b"))
-  draw_rect(Rect2(a.position+Vector2(15,15),Vector2(33,18)),Color("746956"))
-  draw_rect(Rect2(a.position+Vector2(16,16),Vector2(10,15)),Color("b3a58c"))
+  draw_circle(center,5,Color("3d3930"))
+  draw_arc(center,5,0,TAU,16,Color("c6ab73"),1)
+  draw_line(center-Vector2(3,0),center+Vector2(3,0),Color("c6ab73"))
+  draw_line(center-Vector2(0,3),center+Vector2(0,3),Color("c6ab73"))
 
 func wheel_art(value: int, symbols: bool) -> Texture2D:
  var path := "res://assets/puzzles/%s_%d.png" % ["symbol" if symbols else "number",value]
  return load(path) as Texture2D
+
+
+func build_journal() -> void:
+ var layer := CanvasLayer.new()
+ layer.layer=5
+ add_child(layer)
+ var button := Button.new()
+ button.text="DIARIO"
+ button.position=Vector2(675,78)
+ button.size=Vector2(125,32)
+ layer.add_child(button)
+ button.pressed.connect(toggle_journal)
+ journal_panel=PanelContainer.new()
+ journal_panel.position=Vector2(230,65)
+ journal_panel.size=Vector2(500,310)
+ var style := StyleBoxFlat.new()
+ style.bg_color=Color("22282a")
+ style.border_color=Color("a28a62")
+ style.set_border_width_all(2)
+ style.set_content_margin_all(20)
+ journal_panel.add_theme_stylebox_override("panel",style)
+ layer.add_child(journal_panel)
+ var box := VBoxContainer.new()
+ box.add_theme_constant_override("separation",14)
+ journal_panel.add_child(box)
+ var title := Label.new()
+ title.text="CUADERNO DE INVESTIGACIÓN / UMBRAL"
+ title.add_theme_color_override("font_color",Color("d6bb88"))
+ box.add_child(title)
+ journal_text=Label.new()
+ journal_text.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
+ journal_text.custom_minimum_size=Vector2(450,135)
+ box.add_child(journal_text)
+ for action in ["Guardar partida","Cargar partida","Activar / desactivar lluvia","Cerrar diario"]:
+  var b := Button.new()
+  b.text=action
+  box.add_child(b)
+  match action:
+   "Guardar partida": b.pressed.connect(save_progress)
+   "Cargar partida": b.pressed.connect(load_progress)
+   "Activar / desactivar lluvia": b.pressed.connect(toggle_weather)
+   "Cerrar diario": b.pressed.connect(toggle_journal)
+ journal_panel.hide()
+
+func toggle_weather() -> void:
+ weather.set("enabled",not bool(weather.get("enabled")))
+ weather.queue_redraw()
+
+func toggle_journal() -> void:
+ if game_over or inventory_open or exploration_panel.visible or memory_open: return
+ journal_open=not journal_open
+ journal_panel.visible=journal_open
+ player.inventory_locked=journal_open
+ for foe in foes: foe.set_physics_process(not journal_open)
+ if journal_open:
+  journal_text.text="CAPÍTULO CERO\n"+("Carta encontrada. " if read_letter else "Busca la carta de la casa. ")+("Salida abierta." if door_open else "Encuentra la llave y abre la salida.")+"\nMecanismos resueltos: %d / 6\nRefugios visitados: %d / 9" % [solved.count(true),visited_houses.size()]
+  journal_text.text+="\nRecuerdos: %d / 4" % memories.size()
+  for i in range(MEMORY_TITLES.size()):
+   if memories.has(i): journal_text.text+="\n• "+MEMORY_TITLES[i]
+
+func save_progress() -> void:
+ var cfg := ConfigFile.new()
+ cfg.set_value("run","position",player.position)
+ cfg.set_value("run","checkpoint",checkpoint)
+ cfg.set_value("run","items",inventory_items)
+ cfg.set_value("run","health",player.health)
+ cfg.set_value("run","battery",player.flashlight_battery)
+ cfg.set_value("run","door",door_open)
+ cfg.set_value("run","key",took_key)
+ cfg.set_value("run","letter",read_letter)
+ cfg.set_value("run","exit",found_exit)
+ cfg.set_value("run","solved",solved)
+ cfg.set_value("run","visited",visited_houses)
+ cfg.set_value("run","searched_furniture",searched_furniture)
+ cfg.set_value("run","explored",explored)
+ cfg.set_value("run","memories",memories)
+ var result := cfg.save("user://night_save.cfg")
+ show_message("Partida guardada." if result==OK else "No se pudo guardar.",3.0)
+ if journal_open: journal_text.text="Partida guardada." if result==OK else "No se pudo guardar."
+
+func load_progress() -> void:
+ var cfg := ConfigFile.new()
+ if cfg.load("user://night_save.cfg")!=OK:
+  journal_text.text="No hay una partida guardada."
+  return
+ player.position=cfg.get_value("run","position",Vector2(170,130))
+ checkpoint=cfg.get_value("run","checkpoint",Vector2(170,130))
+ inventory_items.assign(cfg.get_value("run","items",[]))
+ player.health=clampf(float(cfg.get_value("run","health",100)),1,100)
+ player.flashlight_battery=clampf(float(cfg.get_value("run","battery",100)),0,100)
+ door_open=cfg.get_value("run","door",false)
+ door_opening=false
+ door_progress=1.0 if door_open else 0.0
+ door_body.collision_layer=0 if door_open else 2
+ took_key=cfg.get_value("run","key",false)
+ read_letter=cfg.get_value("run","letter",false)
+ found_exit=cfg.get_value("run","exit",false)
+ solved.assign(cfg.get_value("run","solved",[false,false,false,false,false,false]))
+ while solved.size()<PUZZLE_POINTS.size(): solved.append(false)
+ visited_houses=cfg.get_value("run","visited",{})
+ searched_furniture=cfg.get_value("run","searched_furniture",{})
+ explored=cfg.get_value("run","explored",{})
+ memories=cfg.get_value("run","memories",{})
+ rebuild_navigation()
+ if found_exit: spawn_encounter()
+ refresh_inventory()
+ toggle_journal()
+ show_message("Partida recuperada.",3.0)
+
+
+func build_memory_ui() -> void:
+ var layer := CanvasLayer.new()
+ layer.layer=12
+ add_child(layer)
+ memory_panel=ColorRect.new()
+ memory_panel.color=Color(0.035,0.045,0.05,0.98)
+ memory_panel.size=Vector2(960,540)
+ layer.add_child(memory_panel)
+ var box := VBoxContainer.new()
+ box.position=Vector2(180,100)
+ box.size=Vector2(600,340)
+ box.add_theme_constant_override("separation",24)
+ memory_panel.add_child(box)
+ var heading := Label.new()
+ heading.text="P R O Y E C T O   U M B R A L   /   F R A G M E N T O"
+ heading.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
+ heading.add_theme_color_override("font_color",Color("a28a62"))
+ box.add_child(heading)
+ memory_title=Label.new()
+ memory_title.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
+ memory_title.add_theme_font_size_override("font_size",32)
+ box.add_child(memory_title)
+ memory_text=Label.new()
+ memory_text.custom_minimum_size=Vector2(600,160)
+ memory_text.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
+ memory_text.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
+ memory_text.add_theme_font_size_override("font_size",21)
+ memory_text.add_theme_color_override("font_color",Color("d6bb88"))
+ box.add_child(memory_text)
+ var b := Button.new()
+ b.text="VOLVER A LA REALIDAD"
+ b.pressed.connect(close_memory)
+ box.add_child(b)
+ memory_panel.hide()
+
+func open_memory(index: int) -> void:
+ if memory_open or game_over: return
+ memories[index]=true
+ memory_open=true
+ player.inventory_locked=true
+ player.velocity=Vector2.ZERO
+ for foe in foes: foe.set_physics_process(false)
+ memory_title.text=MEMORY_TITLES[index]
+ memory_text.text=MEMORY_LINES[index]
+ memory_panel.modulate.a=0.0
+ memory_panel.show()
+ create_tween().tween_property(memory_panel,"modulate:a",1.0,0.45)
+
+func close_memory() -> void:
+ memory_panel.hide()
+ memory_open=false
+ player.inventory_locked=false
+ for foe in foes: foe.set_physics_process(true)
+ show_message("Fragmento añadido al diario.",3.0)

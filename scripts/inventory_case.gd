@@ -104,10 +104,10 @@ func _draw() -> void:
  for y in range(ROWS):
   for x in range(COLS):
    var r := cell_rect(x,y)
-   var dark := Color("242a26") if (x+y)%2==0 else Color("222824")
+   var dark := Color("29312f") if (x+y)%2==0 else Color("252d2b")
    draw_rect(r,dark)
-   draw_line(r.position,r.position+Vector2(r.size.x,0),Color("343d36"),1.0)
-   draw_line(r.position,r.position+Vector2(0,r.size.y),Color("353c35"),1.0)
+   draw_line(r.position,r.position+Vector2(r.size.x,0),Color("46504a"),1.0)
+   draw_line(r.position,r.position+Vector2(0,r.size.y),Color("46504a"),1.0)
    draw_line(r.position+Vector2(0,r.size.y),r.end,Color("101613"),1.0)
    draw_line(r.position+Vector2(r.size.x,0),r.end,Color("111612"),1.0)
  var font := ThemeDB.fallback_font

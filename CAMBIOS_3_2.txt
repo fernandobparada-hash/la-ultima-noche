@@ -1,0 +1,8 @@
+Alpha 3.2 — prueba ambiental
+- Lluvia y ondas ambientales opcionales, eventos de tensión adicionales.
+- Paletas y alfombras distintas para interiores, etiquetas de edificios descubiertos en mapa.
+- Diario con progreso, guardado/carga local y guardado automático en casas.
+- Conserva los sprites, controles, mapa, mecanismos y linterna anteriores.
+- Pendiente: expansión real del mapa, nuevos mecanismos, jefes, finales, menú principal y revisión de IA.
+- No se ha ejecutado en Godot; comprobar diario, guardado/carga y rendimiento en PC/móvil.
+- El guardado no conserva el estado exacto de los enemigos.

@@ -1,0 +1,1 @@
+Alpha 3.3: seis mecanismos en total, cuatro nuevos con pistas, recompensas y guardado compatible con partidas anteriores. IA: vigilancia giratoria, oído diferenciado, campanero activa alertas, patrullas variables y recuperación de rutas bloqueadas. No probado en el motor Godot.

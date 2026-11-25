@@ -1,0 +1,1 @@
+Alpha 3.5: expansión al este (1600 x 616), cinco lugares accesibles, mapa y navegación ampliados, mobiliario y puntos de retorno. Interiores provisionales de una sala. Sin prueba de ejecución en Godot.
