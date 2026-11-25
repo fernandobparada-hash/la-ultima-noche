@@ -105,6 +105,15 @@ var shot_impact := false
 
 const WORLD_SCALE := 1.55
 
+# --- Estilo de interfaz (mapa, inventario, acertijos, cartas) ---
+const UI_FONT = preload("res://assets/fonts/IMFellEnglish-Regular.ttf")
+const UI_FONT_ITALIC = preload("res://assets/fonts/IMFellEnglish-Italic.ttf")
+const OLD_PAPER = preload("res://assets/ui/carta_antigua.png")
+const MAP_PAPER = preload("res://assets/ui/mapa_pergamino.png")
+const INK := Color("3a2414")
+const UI_GOLD := Color("e0c896")
+const UI_BRASS := Color("b08d57")
+
 const WALLS := [
  Rect2(0,0,1600,16),Rect2(0,600,1600,16),Rect2(0,0,16,616),Rect2(1584,0,16,616),
  Rect2(40,40,430,14),Rect2(40,40,14,310),Rect2(456,40,14,310),
@@ -112,7 +121,11 @@ const WALLS := [
  Rect2(40,205,175,12),Rect2(270,205,200,12),
  Rect2(250,40,12,85),Rect2(250,175,12,42)
 ]
-const BUILDINGS := [Rect2(550,38,155,100),Rect2(790,48,154,100),Rect2(600,205,145,100),Rect2(810,215,145,100),Rect2(1050,45,210,125),Rect2(1330,45,210,125),Rect2(1050,245,210,125),Rect2(1330,245,210,125),Rect2(1190,450,210,110)]
+# Distrito este: se dibuja EAST_SHIFT px más abajo para que su calle principal continúe la del oeste;
+# sus edificios (colisiones, puertas e interiores) se desplazan lo mismo.
+const EAST_X := 985.0
+const EAST_SHIFT := 30.0
+const BUILDINGS := [Rect2(550,38,155,100),Rect2(790,48,154,100),Rect2(600,205,145,100),Rect2(810,215,145,100),Rect2(1050,75,210,125),Rect2(1330,75,210,125),Rect2(1050,275,210,125),Rect2(1330,275,210,125),Rect2(1190,480,210,110)]
 const FURNITURE := [
  Rect2(90,85,75,32),Rect2(310,100,72,28),Rect2(105,250,80,26),
  Rect2(320,252,85,25),Rect2(530,375,90,20),Rect2(700,475,90,20)
@@ -301,7 +314,7 @@ func build_lighting() -> void:
  shade.color=Color("68717a")
  add_child(shade)
  var glow := make_glow()
- for location in [Vector2(185,158),Vector2(350,175),Vector2(590,405),Vector2(845,405),Vector2(1290,205),Vector2(1290,405),Vector2(1450,470)]:
+ for location in [Vector2(185,158),Vector2(350,175),Vector2(590,405),Vector2(845,405),Vector2(1290,235),Vector2(1290,435),Vector2(1450,500)]:
   var lamp := PointLight2D.new()
   lamp.texture=glow
   lamp.texture_scale=1.7 if location.x<500.0 else 2.3
@@ -369,12 +382,7 @@ func build_hud() -> void:
  inventory_panel.scale=Vector2(0.87,0.87)
  inventory_panel.custom_minimum_size=Vector2(702,535)
  inventory_panel.visible=false
- var panel_style := StyleBoxFlat.new()
- panel_style.bg_color=Color("111513")
- panel_style.border_color=Color("80745a")
- panel_style.set_border_width_all(2)
- panel_style.set_corner_radius_all(7)
- panel_style.set_content_margin_all(4)
+ var panel_style := ui_frame_style(Color("111412"),Color("8c7350"),6.0)
  inventory_panel.add_theme_stylebox_override("panel",panel_style)
  canvas.add_child(inventory_panel)
  var frame := VBoxContainer.new()
@@ -382,47 +390,57 @@ func build_hud() -> void:
  inventory_panel.add_child(frame)
  var title := Label.new()
  title.text="  INVENTARIO   ·   MALETA"
- title.add_theme_font_size_override("font_size",15)
- title.add_theme_color_override("font_color",Color("d8c5a2"))
+ style_label(title,22,UI_GOLD)
  frame.add_child(title)
  inventory_count_label=Label.new()
  inventory_count_label.add_theme_font_size_override("font_size",12)
+ inventory_count_label.add_theme_color_override("font_color",Color("b9ae95"))
  frame.add_child(inventory_count_label)
  inventory_list=preload("res://scripts/inventory_case.gd").new()
  inventory_list.item_selected.connect(_on_inventory_slot)
  inventory_list.layout_changed.connect(refresh_inventory)
  frame.add_child(inventory_list)
+ var lower_panel := PanelContainer.new()
+ var lower_style := StyleBoxFlat.new()
+ lower_style.bg_color=Color("0c0e0d")
+ lower_style.border_color=Color("3d4239")
+ lower_style.set_border_width_all(1)
+ lower_style.set_corner_radius_all(4)
+ lower_style.set_content_margin_all(5)
+ lower_panel.add_theme_stylebox_override("panel",lower_style)
+ frame.add_child(lower_panel)
  var lower := HBoxContainer.new()
- frame.add_child(lower)
+ lower.add_theme_constant_override("separation",8)
+ lower_panel.add_child(lower)
  inventory_description=Label.new()
- inventory_description.custom_minimum_size=Vector2(488,40)
+ inventory_description.custom_minimum_size=Vector2(478,40)
  inventory_description.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
- inventory_description.add_theme_font_size_override("font_size",13)
+ style_label(inventory_description,16,Color("e3d6b8"))
  lower.add_child(inventory_description)
  inventory_use_button=Button.new()
  inventory_use_button.text="USAR / EQUIPAR"
  inventory_use_button.custom_minimum_size=Vector2(185,40)
+ style_brass_button(inventory_use_button)
  inventory_use_button.pressed.connect(use_inventory_selection)
  lower.add_child(inventory_use_button)
  paper_reader=PanelContainer.new()
- paper_reader.position=Vector2(260,95)
- paper_reader.size=Vector2(440,350)
- var paper_style := StyleBoxTexture.new()
- paper_style.texture=preload("res://assets/document_paper.png")
- paper_style.set_content_margin_all(34)
- paper_reader.add_theme_stylebox_override("panel",paper_style)
+ paper_reader.position=Vector2(240,70)
+ paper_reader.size=Vector2(480,400)
+ # Carta antigua: pergamino manchado con bordes quemados.
+ paper_reader.add_theme_stylebox_override("panel",old_paper_style(48.0))
  canvas.add_child(paper_reader)
  var paper_layout := VBoxContainer.new()
- paper_layout.add_theme_constant_override("separation",20)
+ paper_layout.add_theme_constant_override("separation",16)
  paper_reader.add_child(paper_layout)
  paper_text=Label.new()
- paper_text.custom_minimum_size=Vector2(372,240)
+ paper_text.custom_minimum_size=Vector2(384,250)
  paper_text.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
- paper_text.add_theme_font_size_override("font_size",23)
- paper_text.add_theme_color_override("font_color",Color("493322"))
+ style_label(paper_text,24,INK,true)
+ paper_text.add_theme_constant_override("line_spacing",2)
  paper_layout.add_child(paper_text)
  var close_paper := Button.new()
  close_paper.text="CERRAR"
+ style_brass_button(close_paper,true)
  close_paper.pressed.connect(func(): paper_reader.hide())
  paper_layout.add_child(close_paper)
  paper_reader.hide()
@@ -541,6 +559,7 @@ func _process(delta: float) -> void:
   if exploration_panel.visible: close_exploration()
   else: open_map()
  if exploration_panel.visible:
+  if map_box.visible: map_view.queue_redraw()
   if Input.is_action_just_pressed("ui_cancel"): close_exploration()
   return
  if Input.is_action_just_pressed("inventory") and not game_over:
@@ -696,7 +715,15 @@ func show_message(message: String,duration: float) -> void:
 
 func _draw() -> void:
  # Authored, pixel-quantized texture; nearest-neighbor filtering.
- draw_texture_rect(GROUND,Rect2(0,0,WORLD_W,WORLD_H),false)
+ # Oeste tal cual (ground.png está a 2x).
+ draw_texture_rect_region(GROUND,Rect2(0,0,EAST_X,WORLD_H),Rect2(0,0,EAST_X*2.0,WORLD_H*2.0))
+ # Este desplazado hacia abajo; la franja superior se rellena con el borde superior del mismo dibujo.
+ var east_w := WORLD_W-EAST_X
+ draw_texture_rect_region(GROUND,Rect2(EAST_X,EAST_SHIFT,east_w,WORLD_H-EAST_SHIFT),Rect2(EAST_X*2.0,0,east_w*2.0,(WORLD_H-EAST_SHIFT)*2.0))
+ draw_texture_rect_region(GROUND,Rect2(EAST_X,0,east_w,EAST_SHIFT),Rect2(EAST_X*2.0,0,east_w*2.0,EAST_SHIFT*2.0))
+ # Costura suave: el borde del oeste se funde con el este en 24 px.
+ for i in range(12):
+  draw_texture_rect_region(GROUND,Rect2(EAST_X+i*2.0,0,2.0,WORLD_H),Rect2(EAST_X*2.0-4.0,0,4.0,WORLD_H*2.0),Color(1,1,1,1.0-float(i+1)/13.0))
  draw_house_interiors()
  # Muebles, paredes, ventanas, casas y vegetación están pintados en ground.png (2x de resolución).
  # Wooden door with fixed stone jambs and a smooth hinge animation.
@@ -752,40 +779,41 @@ func build_exploration_ui() -> void:
   if not game_over and not inventory_open and not exploration_panel.visible: open_map())
  layer.add_child(map_button)
  exploration_panel=PanelContainer.new()
- exploration_panel.position=Vector2(155,35)
- exploration_panel.size=Vector2(650,470)
- var style := StyleBoxTexture.new()
- style.texture=preload("res://assets/document_paper.png")
- style.set_content_margin_all(20)
- exploration_panel.add_theme_stylebox_override("panel",style)
+ exploration_panel.position=Vector2(155,28)
+ exploration_panel.size=Vector2(650,480)
+ exploration_panel.add_theme_stylebox_override("panel",ui_frame_style(Color("15120e"),Color("8c7350"),16.0))
  layer.add_child(exploration_panel)
  var layout := VBoxContainer.new()
+ layout.add_theme_constant_override("separation",8)
  exploration_panel.add_child(layout)
  map_box=VBoxContainer.new()
+ map_box.add_theme_constant_override("separation",6)
  layout.add_child(map_box)
  var heading := Label.new()
  heading.text="PLANO DEL PUEBLO  /  UMBRAL"
- heading.add_theme_color_override("font_color",Color("493322"))
- heading.add_theme_font_size_override("font_size",24)
+ heading.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
+ style_label(heading,28,UI_GOLD)
  map_box.add_child(heading)
  map_view=Control.new()
  map_view.custom_minimum_size=Vector2(610,350)
  map_view.draw.connect(draw_exploration_map)
  map_box.add_child(map_view)
  map_status=Label.new()
- map_status.add_theme_color_override("font_color",Color("493322"))
+ map_status.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
+ style_label(map_status,17,Color("cdbb95"),true)
  map_box.add_child(map_status)
  puzzle_box=VBoxContainer.new()
  puzzle_box.add_theme_constant_override("separation",10)
  layout.add_child(puzzle_box)
  puzzle_title=Label.new()
- puzzle_title.add_theme_font_size_override("font_size",26)
- puzzle_title.add_theme_color_override("font_color",Color("493322"))
+ puzzle_title.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
+ style_label(puzzle_title,30,UI_GOLD)
  puzzle_box.add_child(puzzle_title)
  puzzle_hint=Label.new()
- puzzle_hint.custom_minimum_size=Vector2(610,65)
+ puzzle_hint.custom_minimum_size=Vector2(610,56)
  puzzle_hint.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
- puzzle_hint.add_theme_color_override("font_color",Color("493322"))
+ puzzle_hint.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
+ style_label(puzzle_hint,18,Color("cdbb95"),true)
  puzzle_box.add_child(puzzle_hint)
  puzzle_mechanism=PanelContainer.new()
  puzzle_box.add_child(puzzle_mechanism)
@@ -795,21 +823,30 @@ func build_exploration_ui() -> void:
  puzzle_mechanism.add_child(wheels)
  for i in range(3):
   var wheel := Button.new()
-  wheel.custom_minimum_size=Vector2(165,150)
+  wheel.custom_minimum_size=Vector2(160,140)
   wheel.add_theme_font_size_override("font_size",24)
   wheel.pressed.connect(turn_wheel.bind(i))
   wheels.add_child(wheel)
   puzzle_wheels.append(wheel)
+ var wheel_caption := Label.new()
+ wheel_caption.text="Pulsa cada disco para girarlo"
+ wheel_caption.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
+ style_label(wheel_caption,15,Color("9d8f74"),true)
+ puzzle_box.add_child(wheel_caption)
  puzzle_submit=Button.new()
  puzzle_submit.text="PROBAR MECANISMO"
+ puzzle_submit.custom_minimum_size=Vector2(0,40)
+ style_brass_button(puzzle_submit)
  puzzle_submit.pressed.connect(check_puzzle)
  puzzle_box.add_child(puzzle_submit)
  puzzle_feedback=Label.new()
  puzzle_feedback.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
- puzzle_feedback.add_theme_color_override("font_color",Color("493322"))
+ puzzle_feedback.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
+ style_label(puzzle_feedback,19,Color("e3d6b8"))
  puzzle_box.add_child(puzzle_feedback)
  var close := Button.new()
  close.text="CERRAR"
+ style_brass_button(close)
  close.pressed.connect(close_exploration)
  layout.add_child(close)
  exploration_panel.hide()
@@ -825,50 +862,93 @@ func open_map() -> void:
  active_puzzle=-1
  map_box.show()
  puzzle_box.hide()
- map_status.text="● Tú    ·    ? Mecanismo    ·    ✓ Resuelto    |    %d / 6" % (solved.count(true))
+ map_status.text="Mecanismos resueltos: %d / 6" % (solved.count(true))
  exploration_panel.show()
  player.inventory_locked=true
  map_view.queue_redraw()
 
 func draw_exploration_map() -> void:
+ # Plano dibujado a tinta sobre pergamino viejo.
  var factor := Vector2(0.375,0.55)
- map_view.draw_texture_rect(preload("res://assets/document_paper.png"),Rect2(0,0,600,339),false)
- map_view.draw_rect(Rect2(0,0,600,339),Color("72553b"),false,2.0)
- map_view.draw_rect(Rect2(4,4,592,331),Color("96724e"),false,1.0)
- for road: Rect2 in [Rect2(480,405,500,55),Rect2(985,170,600,65),Rect2(985,370,600,65),Rect2(1270,16,48,584)]:
-  map_view.draw_rect(Rect2(road.position*factor,road.size*factor),Color("b5a080"))
- for x in range(0,600,15):
-  map_view.draw_line(Vector2(x,0),Vector2(x,339),Color(0.35,0.23,0.12,0.13))
- for y in range(0,339,22):
-  map_view.draw_line(Vector2(0,y),Vector2(600,y),Color(0.35,0.23,0.12,0.13))
+ var font: Font = UI_FONT
+ var ink := Color(0.23,0.14,0.08)
+ map_view.draw_texture_rect(MAP_PAPER,Rect2(0,0,600,339),false)
+ for x in range(30,580,30):
+  map_view.draw_line(Vector2(x,22),Vector2(x,318),Color(ink,0.06))
+ for y in range(30,320,30):
+  map_view.draw_line(Vector2(22,y),Vector2(578,y),Color(ink,0.06))
+ for road: Rect2 in [Rect2(480,405,500,55),Rect2(985,200,600,65),Rect2(985,400,600,65),Rect2(1270,16,48,584)]:
+  var r := Rect2(road.position*factor,road.size*factor).intersection(Rect2(14,14,572,311))
+  map_view.draw_rect(r,Color(0.47,0.36,0.22,0.30))
+  if r.size.x>r.size.y:
+   for x in range(int(r.position.x),int(r.end.x)-6,12):
+    map_view.draw_line(Vector2(x,r.get_center().y),Vector2(x+6,r.get_center().y),Color(ink,0.35),1.0)
+  else:
+   for y in range(int(r.position.y),int(r.end.y)-6,12):
+    map_view.draw_line(Vector2(r.get_center().x,y),Vector2(r.get_center().x,y+6),Color(ink,0.35),1.0)
  for area: Rect2 in BUILDINGS:
   var roof := Rect2(area.position*factor,area.size*factor)
-  map_view.draw_rect(roof,Color("ad8962"))
-  map_view.draw_rect(roof,Color("60462e"),false,2.0)
-  map_view.draw_line(Vector2(roof.get_center().x,roof.position.y),Vector2(roof.get_center().x,roof.end.y),Color("60462e"),2.0)
-  for yy in range(int(roof.position.y)+5,int(roof.end.y),5):
-   map_view.draw_line(Vector2(roof.position.x+2,yy),Vector2(roof.end.x-2,yy),Color(0.35,0.22,0.12,0.25))
+  map_view.draw_rect(Rect2(roof.position+Vector2(2,2),roof.size),Color(ink,0.25))
+  map_view.draw_rect(roof,Color(0.55,0.42,0.27,0.55))
+  for k in range(4,int(roof.size.x+roof.size.y),5):
+   var p1 := roof.position+Vector2(minf(k,roof.size.x),maxf(0.0,k-roof.size.x))
+   var p2 := roof.position+Vector2(maxf(0.0,k-roof.size.y),minf(k,roof.size.y))
+   map_view.draw_line(p1,p2,Color(ink,0.16),1.0)
+  map_view.draw_rect(roof,ink,false,1.5)
  for area: Rect2 in WALLS:
-  map_view.draw_rect(Rect2(area.position*factor,area.size*factor),Color("493d30"))
+  if area.size.x>=1500 or area.size.y>=600: continue
+  map_view.draw_rect(Rect2(area.position*factor,area.size*factor),Color(ink,0.85))
+ # Niebla sobre lo que aún no se ha explorado.
  for y in range(16):
   for x in range(40):
    if not explored.has(Vector2i(x,y)):
-    map_view.draw_rect(Rect2(Vector2(x,y)*40.0*factor,Vector2(40, minf(40.0,616.0-y*40.0))*factor),Color("514b40"))
+    var cell := Rect2(Vector2(x,y)*40.0*factor,Vector2(40, minf(40.0,616.0-y*40.0))*factor)
+    map_view.draw_rect(cell.grow(0.5),Color(0.16,0.12,0.08,0.80))
  for i in range(PUZZLE_POINTS.size()):
   var point: Vector2=PUZZLE_POINTS[i]
   if explored.has(Vector2i((point/40.0).floor())):
-   map_view.draw_circle(point*factor,5.0,Color("55754d") if solved[i] else Color("9b6332"))
- var compass := Vector2(574,24)
- map_view.draw_circle(compass,17,Color("d8c09a"))
- map_view.draw_arc(compass,16,0,TAU,32,Color("63472d"),1.5)
- map_view.draw_colored_polygon(PackedVector2Array([compass+Vector2(0,-13),compass+Vector2(-5,5),compass+Vector2(5,5)]),Color("74402e"))
- map_view.draw_string(ThemeDB.fallback_font,compass+Vector2(-4,-18),"N",HORIZONTAL_ALIGNMENT_LEFT,-1,12,Color("493322"))
+   var c: Vector2=point*factor
+   if solved[i]:
+    map_view.draw_circle(c,6.0,Color("4f6b45"))
+    map_view.draw_polyline(PackedVector2Array([c+Vector2(-3,0),c+Vector2(-1,3),c+Vector2(3,-3)]),Color("efe6c8"),1.6)
+   else:
+    map_view.draw_circle(c,6.5,Color("8e3a22"))
+    map_view.draw_string(font,c+Vector2(-3.5,4.5),"?",HORIZONTAL_ALIGNMENT_LEFT,-1,13,Color("f3e2bb"))
  for i in range(BUILDINGS.size()):
   var center: Vector2=BUILDINGS[i].get_center()
   if explored.has(Vector2i((center/40.0).floor())):
-   map_view.draw_string(ThemeDB.fallback_font,center*factor+Vector2(-30,0),["RELOJ","ARCHIVO","JARDÍN","VIAJERO","HOSPITAL","IGLESIA","POLICÍA","MERCADO","CEMENTERIO"][i],HORIZONTAL_ALIGNMENT_LEFT,-1,9,Color("392d23"))
- map_view.draw_circle(player.position*factor,5.0,Color("e8dcb7"))
- map_view.draw_arc(player.position*factor,6.0,0.0,TAU,16,Color("493322"),2.0)
+   var place: String=["RELOJ","ARCHIVO","JARDÍN","VIAJERO","HOSPITAL","IGLESIA","POLICÍA","MERCADO","CEMENTERIO"][i]
+   var w := font.get_string_size(place,HORIZONTAL_ALIGNMENT_LEFT,-1,13).x
+   var pos := center*factor+Vector2(-w*0.5,4)
+   map_view.draw_rect(Rect2(pos+Vector2(-3,-11),Vector2(w+6,15)),Color(0.86,0.78,0.6,0.75))
+   map_view.draw_string(font,pos,place,HORIZONTAL_ALIGNMENT_LEFT,-1,13,ink)
+ # Rosa de los vientos.
+ var compass := Vector2(560,52)
+ map_view.draw_arc(compass,20,0,TAU,40,Color(ink,0.8),1.2)
+ map_view.draw_arc(compass,16,0,TAU,40,Color(ink,0.5),1.0)
+ for k in range(4):
+  var d := Vector2.UP.rotated(k*PI*0.5)
+  var side := d.orthogonal()*4.0
+  map_view.draw_colored_polygon(PackedVector2Array([compass+d*24,compass+side,compass-side]),Color("8e3a22") if k==0 else ink)
+ map_view.draw_string(font,compass+Vector2(-5,-27),"N",HORIZONTAL_ALIGNMENT_LEFT,-1,15,ink)
+ # Leyenda.
+ var lg := Rect2(26,262,150,62)
+ map_view.draw_rect(lg,Color(0.86,0.78,0.6,0.80))
+ map_view.draw_rect(lg,Color(ink,0.8),false,1.0)
+ map_view.draw_circle(lg.position+Vector2(14,14),4.5,Color("b0302a"))
+ map_view.draw_string(font,lg.position+Vector2(26,19),"Tú",HORIZONTAL_ALIGNMENT_LEFT,-1,14,ink)
+ map_view.draw_circle(lg.position+Vector2(14,32),5.5,Color("8e3a22"))
+ map_view.draw_string(font,lg.position+Vector2(11,36.5),"?",HORIZONTAL_ALIGNMENT_LEFT,-1,11,Color("f3e2bb"))
+ map_view.draw_string(font,lg.position+Vector2(26,37),"Mecanismo",HORIZONTAL_ALIGNMENT_LEFT,-1,14,ink)
+ map_view.draw_circle(lg.position+Vector2(14,50),5.5,Color("4f6b45"))
+ map_view.draw_string(font,lg.position+Vector2(26,55),"Resuelto",HORIZONTAL_ALIGNMENT_LEFT,-1,14,ink)
+ # Marcador del jugador con pulso.
+ var t := float(Time.get_ticks_msec())/1000.0
+ var pp: Vector2=player.position*factor
+ var pulse := fmod(t*0.9,1.0)
+ map_view.draw_arc(pp,5.0+pulse*12.0,0.0,TAU,24,Color(0.69,0.19,0.16,0.7*(1.0-pulse)),2.0)
+ map_view.draw_circle(pp,5.0,Color("b0302a"))
+ map_view.draw_arc(pp,5.5,0.0,TAU,16,Color("f3e2bb"),1.5)
 
 func open_puzzle(index: int) -> void:
  active_puzzle=index
@@ -885,6 +965,7 @@ func open_puzzle(index: int) -> void:
  puzzle_mechanism.add_theme_stylebox_override("panel", mechanism_style(index))
  update_wheels()
  puzzle_feedback.text=""
+ puzzle_feedback.add_theme_color_override("font_color",Color("e3d6b8"))
  exploration_panel.show()
  player.inventory_locked=true
 
@@ -897,14 +978,16 @@ func check_puzzle() -> void:
   answer="%d%d%d" % wheel_values
  if active_puzzle>=2 and active_puzzle==5 and not (solved[2] and solved[3]):
   puzzle_feedback.text="Primero resuelve el reloj y el archivo."
+  puzzle_feedback.add_theme_color_override("font_color",Color("e0b070"))
   return
  if (active_puzzle>=2 and wheel_values==EXTRA_CODES[active_puzzle-2]) or (active_puzzle==0 and answer=="luna sol estrella") or (active_puzzle==1 and solved[0] and answer=="427"):
   solved[active_puzzle]=true
   puzzle_submit.disabled=true
   update_wheels()
   var tween := create_tween()
-  puzzle_mechanism.modulate=Color("d9c38d")
-  tween.tween_property(puzzle_mechanism,"modulate",Color.WHITE,0.65)
+  puzzle_mechanism.modulate=Color(1.5,1.35,0.9)
+  tween.tween_property(puzzle_mechanism,"modulate",Color.WHITE,0.8)
+  puzzle_feedback.add_theme_color_override("font_color",Color("b9d48c"))
   if active_puzzle==0:
    puzzle_feedback.text="Abierto. Nota: cuatro estaciones, dos lunas, siete campanas."
   else:
@@ -916,6 +999,9 @@ func check_puzzle() -> void:
  else:
   puzzle_attempts+=1
   puzzle_feedback.text="No encaja. Revisa las pistas."
+  puzzle_feedback.add_theme_color_override("font_color",Color("e88a6c"))
+  puzzle_mechanism.modulate=Color(1.45,0.55,0.45)
+  create_tween().tween_property(puzzle_mechanism,"modulate",Color.WHITE,0.5)
   if puzzle_attempts>=3 and active_puzzle>=2:
    puzzle_feedback.text=["Formato: una cifra de hora y dos de minutos.","La última cifra es menor que tres.","Prueba el disco central y observa el cambio.","Invierte primero; después suma uno."][active_puzzle-2]
  queue_redraw()
@@ -928,13 +1014,14 @@ func close_exploration() -> void:
 
 func mechanism_style(index: int) -> StyleBoxFlat:
  var style := StyleBoxFlat.new()
- style.bg_color=Color("513927") if index==0 else Color("414944")
- style.border_color=Color("a78b60") if index==0 else Color("89958a")
- style.set_border_width_all(4)
- style.set_corner_radius_all(8)
- style.set_content_margin_all(18)
- style.shadow_color=Color(0.1,0.07,0.04,0.6)
- style.shadow_size=5
+ style.bg_color=Color("2e2016") if index==0 else Color("1f2723")
+ style.border_color=UI_BRASS if index==0 else Color("7f8c80")
+ style.set_border_width_all(3)
+ style.border_width_bottom=5
+ style.set_corner_radius_all(10)
+ style.set_content_margin_all(14)
+ style.shadow_color=Color(0,0,0,0.55)
+ style.shadow_size=8
  return style
 
 func turn_wheel(index: int) -> void:
@@ -961,16 +1048,26 @@ func update_wheels() -> void:
   wheel.icon_alignment=HORIZONTAL_ALIGNMENT_CENTER
   wheel.tooltip_text=SYMBOLS[wheel_values[i]] if active_puzzle==0 else str(wheel_values[i])
   wheel.disabled=solved[active_puzzle]
-  for state in ["normal","hover","pressed","disabled"]:
+  for state in ["normal","hover","pressed","disabled","focus"]:
    var style := StyleBoxFlat.new()
-   style.bg_color=Color("34251b") if active_puzzle==0 else Color("202824")
-   if state=="hover": style.bg_color=style.bg_color.lightened(0.15)
-   style.border_color=Color("b49a6d")
+   style.bg_color=Color("1d140e") if active_puzzle==0 else Color("141a17")
+   if state=="hover": style.bg_color=style.bg_color.lightened(0.12)
+   if state=="pressed": style.bg_color=style.bg_color.darkened(0.3)
+   style.border_color=Color("e2c27f") if state=="hover" or state=="focus" else UI_BRASS
+   if state=="disabled": style.border_color=Color("8fb07a")
+   if state=="focus": style.draw_center=false
    style.set_border_width_all(3)
-   style.set_corner_radius_all(40 if active_puzzle==0 else 9)
+   style.border_width_bottom=5 if state!="pressed" else 3
+   style.set_corner_radius_all(70 if active_puzzle==0 else 14)
+   style.shadow_color=Color(0,0,0,0.5)
+   style.shadow_size=0 if state=="focus" else 6
+   style.set_content_margin_all(10)
    wheel.add_theme_stylebox_override(state,style)
+  wheel.add_theme_font_override("font",UI_FONT)
+  wheel.add_theme_font_size_override("font_size",22)
   wheel.add_theme_color_override("font_color",Color("e7d2a8"))
   wheel.add_theme_color_override("font_hover_color",Color("fff0c9"))
+  wheel.add_theme_color_override("font_disabled_color",Color("cfe0b5"))
 
 
 func house_obstacles() -> Array[Rect2]:
@@ -1026,6 +1123,58 @@ func wheel_art(value: int, symbols: bool) -> Texture2D:
  return load(path) as Texture2D
 
 
+func ui_frame_style(bg: Color=Color("14120f"), border: Color=Color("8c7350"), margin: float=18.0) -> StyleBoxFlat:
+ # Marco oscuro con borde de latón y sombra suave.
+ var s := StyleBoxFlat.new()
+ s.bg_color=bg
+ s.border_color=border
+ s.set_border_width_all(2)
+ s.set_corner_radius_all(6)
+ s.shadow_color=Color(0,0,0,0.65)
+ s.shadow_size=16
+ s.shadow_offset=Vector2(0,5)
+ s.set_content_margin_all(margin)
+ return s
+
+func old_paper_style(margin: float=44.0) -> StyleBoxTexture:
+ # Pergamino envejecido con bordes quemados (9-slice para no deformar los bordes).
+ var s := StyleBoxTexture.new()
+ s.texture=OLD_PAPER
+ s.texture_margin_left=42
+ s.texture_margin_right=42
+ s.texture_margin_top=42
+ s.texture_margin_bottom=42
+ s.set_content_margin_all(margin)
+ return s
+
+func style_label(l: Label, size: int, color: Color, italic: bool=false) -> void:
+ l.add_theme_font_override("font",UI_FONT_ITALIC if italic else UI_FONT)
+ l.add_theme_font_size_override("font_size",size)
+ l.add_theme_color_override("font_color",color)
+
+func style_brass_button(b: Button, ink: bool=false) -> void:
+ # Botón de latón (o de tinta, sobre papel) con estados normal / encima / pulsado / desactivado.
+ for state in ["normal","hover","pressed","disabled","focus"]:
+  var st := StyleBoxFlat.new()
+  st.set_corner_radius_all(5)
+  st.set_border_width_all(2 if state!="focus" else 2)
+  st.set_content_margin_all(7)
+  if ink:
+   st.bg_color=Color(0.23,0.14,0.08,0.10 if state=="normal" else 0.22)
+   st.border_color=INK if state!="disabled" else Color(0.23,0.14,0.08,0.35)
+  else:
+   st.bg_color=Color("3a2b1b") if state=="normal" else (Color("57412a") if state=="hover" else (Color("2a1f14") if state=="pressed" else Color("2a2622")))
+   st.border_color=UI_BRASS if state!="hover" else Color("e2c27f")
+   if state=="disabled": st.border_color=Color("5c5446")
+  if state=="focus": st.draw_center=false
+  b.add_theme_stylebox_override(state,st)
+ b.add_theme_font_override("font",UI_FONT)
+ b.add_theme_font_size_override("font_size",18)
+ b.add_theme_color_override("font_color",INK if ink else Color("f1e2bd"))
+ b.add_theme_color_override("font_hover_color",Color("1e1209") if ink else Color("fff2cf"))
+ b.add_theme_color_override("font_pressed_color",INK if ink else Color("e8d3a0"))
+ b.add_theme_color_override("font_disabled_color",Color(0.3,0.2,0.12,0.5) if ink else Color("8d8574"))
+
 func build_journal() -> void:
  var layer := CanvasLayer.new()
  layer.layer=5
@@ -1039,27 +1188,27 @@ func build_journal() -> void:
  journal_panel=PanelContainer.new()
  journal_panel.position=Vector2(230,65)
  journal_panel.size=Vector2(500,310)
- var style := StyleBoxFlat.new()
- style.bg_color=Color("22282a")
- style.border_color=Color("a28a62")
- style.set_border_width_all(2)
- style.set_content_margin_all(20)
- journal_panel.add_theme_stylebox_override("panel",style)
+ # Cuaderno con aspecto de papel antiguo.
+ journal_panel.position=Vector2(225,50)
+ journal_panel.add_theme_stylebox_override("panel",old_paper_style(40.0))
  layer.add_child(journal_panel)
  var box := VBoxContainer.new()
- box.add_theme_constant_override("separation",14)
+ box.add_theme_constant_override("separation",7)
  journal_panel.add_child(box)
  var title := Label.new()
  title.text="CUADERNO DE INVESTIGACIÓN / UMBRAL"
- title.add_theme_color_override("font_color",Color("d6bb88"))
+ style_label(title,21,INK)
  box.add_child(title)
  journal_text=Label.new()
  journal_text.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
- journal_text.custom_minimum_size=Vector2(450,135)
+ journal_text.custom_minimum_size=Vector2(430,135)
+ style_label(journal_text,18,INK,true)
  box.add_child(journal_text)
  for action in ["Guardar partida","Cargar partida","Activar / desactivar lluvia","Cerrar diario"]:
   var b := Button.new()
   b.text=action
+  style_brass_button(b,true)
+  b.add_theme_font_size_override("font_size",16)
   box.add_child(b)
   match action:
    "Guardar partida": b.pressed.connect(save_progress)
