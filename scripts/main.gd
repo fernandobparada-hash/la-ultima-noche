@@ -11,6 +11,7 @@ const WORLD_H := 616.0
 
 const WeatherScript = preload("res://scripts/weather.gd")
 var weather: Node2D
+var atmosphere_shade: CanvasModulate
 var journal_panel: PanelContainer
 var journal_text: Label
 var journal_open := false
@@ -47,6 +48,11 @@ var puzzle_wheels: Array[Button] = []
 var wheel_values: Array[int] = [0,0,0]
 var puzzle_mechanism: PanelContainer
 var puzzle_submit: Button
+var puzzle_reset: Button
+var puzzle_hint_button: Button
+var puzzle_caption: Label
+var puzzle_back: Array[Button] = []
+var puzzle_hint_level := 0
 const SYMBOLS := ["SOL", "LUNA", "ESTRELLA", "OJO", "CAMPANA"]
 var puzzle_feedback: Label
 var puzzle_title: Label
@@ -156,10 +162,12 @@ func _ready() -> void:
  build_lighting()
  var fog := FogScript.new()
  add_child(fog)
+ fog.visible=NightSettings.fog
  build_hud()
  build_exploration_ui()
  weather=WeatherScript.new()
  add_child(weather)
+ weather.set("enabled",NightSettings.rain)
  build_journal()
  build_memory_ui()
  mobile_controls = MobileControlsScript.new()
@@ -168,6 +176,10 @@ func _ready() -> void:
 
  mobile_controls.respawn_requested.connect(respawn_player)
  player.mobile_input = mobile_controls
+ player.flashlight_drain=0.15*[0.65,1.0,1.5][NightSettings.difficulty]
+ if NightSettings.resume_requested:
+  NightSettings.resume_requested=false
+  load_progress(true)
  show_message("Despiertas en una casa desconocida. Busca respuestas.",5.0)
 
 func setup_audio() -> void:
@@ -312,9 +324,10 @@ func build_lighting() -> void:
  build_vignette()
  var shade := CanvasModulate.new()
  shade.color=Color("68717a")
+ atmosphere_shade=shade
  add_child(shade)
  var glow := make_glow()
- for location in [Vector2(185,158),Vector2(350,175),Vector2(590,405),Vector2(845,405),Vector2(1290,235),Vector2(1290,435),Vector2(1450,500)]:
+ for location in [Vector2(185,158),Vector2(350,175),Vector2(590,405),Vector2(845,405),Vector2(1290,235),Vector2(1290,435),Vector2(1450,500),Vector2(1040,430),Vector2(1200,430),Vector2(1510,430)]:
   var lamp := PointLight2D.new()
   lamp.texture=glow
   lamp.texture_scale=1.7 if location.x<500.0 else 2.3
@@ -544,6 +557,11 @@ func _process(delta: float) -> void:
   return
  if journal_open or memory_open: return
  world_time+=delta
+ var outdoors := not bool(weather.call("sheltered",player.position))
+ weather.set("outside",outdoors)
+ var storm_flash := float(weather.get("flash")) if NightSettings.flashes else 0.0
+ atmosphere_shade.color=Color("68717a").lerp(Color("aebdcb"),storm_flash)
+ ambience.volume_db=move_toward(ambience.volume_db,-24.0 if outdoors else -31.0,delta*5.0)
  if door_opening:
   door_progress=minf(1.0,door_progress+delta/0.85)
   if door_progress>=1.0:
@@ -598,7 +616,7 @@ func _process(delta: float) -> void:
  if game_over and Input.is_action_just_pressed("restart"):
   respawn_player()
  var status := "INACTIVO" if enemy.defeated else enemy.state
- ui.text="LA ÚLTIMA NOCHE   /   CAPÍTULO CERO   /   ALPHA 3.6.1\nVIDA %d   ·   ENERGÍA %d   ·   %s   ·   LINTERNA %s" % [int(player.health),int(player.stamina),(player.weapons[player.weapon_index]+(" · ∞" if player.weapons[player.weapon_index]=="Pistola" else "")),("%d%%" % int(player.flashlight_battery))+ (" ENCENDIDA" if player.light_on else " APAGADA")]
+ ui.text="LA ÚLTIMA NOCHE   /   CAPÍTULO CERO   /   ALPHA 3.9\nVIDA %d   ·   ENERGÍA %d   ·   %s   ·   LINTERNA %s" % [int(player.health),int(player.stamina),(player.weapons[player.weapon_index]+(" · ∞" if player.weapons[player.weapon_index]=="Pistola" else "")),("%d%%" % int(player.flashlight_battery))+ (" ENCENDIDA" if player.light_on else " APAGADA")]
  objective.text="[I] INVENTARIO   [ESPACIO] ESQUIVAR   [M] MAPA  /  %s" % ["Explora la calle y evita al Errante" if found_exit else ("Abre la puerta de salida" if took_key else "Busca la llave en la cocina")]
  if player.position.x>500.0 and player.position.y>355.0 and not found_exit:
   found_exit=true
@@ -714,16 +732,8 @@ func show_message(message: String,duration: float) -> void:
  message_time=duration
 
 func _draw() -> void:
- # Authored, pixel-quantized texture; nearest-neighbor filtering.
- # Oeste tal cual (ground.png está a 2x).
- draw_texture_rect_region(GROUND,Rect2(0,0,EAST_X,WORLD_H),Rect2(0,0,EAST_X*2.0,WORLD_H*2.0))
- # Este desplazado hacia abajo; la franja superior se rellena con el borde superior del mismo dibujo.
- var east_w := WORLD_W-EAST_X
- draw_texture_rect_region(GROUND,Rect2(EAST_X,EAST_SHIFT,east_w,WORLD_H-EAST_SHIFT),Rect2(EAST_X*2.0,0,east_w*2.0,(WORLD_H-EAST_SHIFT)*2.0))
- draw_texture_rect_region(GROUND,Rect2(EAST_X,0,east_w,EAST_SHIFT),Rect2(EAST_X*2.0,0,east_w*2.0,EAST_SHIFT*2.0))
- # Costura suave: el borde del oeste se funde con el este en 24 px.
- for i in range(12):
-  draw_texture_rect_region(GROUND,Rect2(EAST_X+i*2.0,0,2.0,WORLD_H),Rect2(EAST_X*2.0-4.0,0,4.0,WORLD_H*2.0),Color(1,1,1,1.0-float(i+1)/13.0))
+ # Unified terrain texture, with the east district already aligned.
+ draw_texture_rect(GROUND,Rect2(0,0,WORLD_W,WORLD_H),false)
  draw_house_interiors()
  # Muebles, paredes, ventanas, casas y vegetación están pintados en ground.png (2x de resolución).
  # Wooden door with fixed stone jambs and a smooth hinge animation.
@@ -803,17 +813,17 @@ func build_exploration_ui() -> void:
  style_label(map_status,17,Color("cdbb95"),true)
  map_box.add_child(map_status)
  puzzle_box=VBoxContainer.new()
- puzzle_box.add_theme_constant_override("separation",10)
+ puzzle_box.add_theme_constant_override("separation",6)
  layout.add_child(puzzle_box)
  puzzle_title=Label.new()
  puzzle_title.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
  style_label(puzzle_title,30,UI_GOLD)
  puzzle_box.add_child(puzzle_title)
  puzzle_hint=Label.new()
- puzzle_hint.custom_minimum_size=Vector2(610,56)
+ puzzle_hint.custom_minimum_size=Vector2(610,48)
  puzzle_hint.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
  puzzle_hint.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
- style_label(puzzle_hint,18,Color("cdbb95"),true)
+ style_label(puzzle_hint,16,Color("cdbb95"),true)
  puzzle_box.add_child(puzzle_hint)
  puzzle_mechanism=PanelContainer.new()
  puzzle_box.add_child(puzzle_mechanism)
@@ -822,23 +832,45 @@ func build_exploration_ui() -> void:
  wheels.add_theme_constant_override("separation",18)
  puzzle_mechanism.add_child(wheels)
  for i in range(3):
+  var column := VBoxContainer.new()
+  column.add_theme_constant_override("separation",4)
+  wheels.add_child(column)
   var wheel := Button.new()
-  wheel.custom_minimum_size=Vector2(160,140)
+  wheel.custom_minimum_size=Vector2(160,112)
   wheel.add_theme_font_size_override("font_size",24)
-  wheel.pressed.connect(turn_wheel.bind(i))
-  wheels.add_child(wheel)
+  wheel.pressed.connect(turn_wheel.bind(i,1))
+  column.add_child(wheel)
   puzzle_wheels.append(wheel)
- var wheel_caption := Label.new()
- wheel_caption.text="Pulsa cada disco para girarlo"
- wheel_caption.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
- style_label(wheel_caption,15,Color("9d8f74"),true)
- puzzle_box.add_child(wheel_caption)
+  var back := Button.new()
+  back.text="‹ ANTERIOR"
+  style_brass_button(back)
+  back.pressed.connect(turn_wheel.bind(i,-1))
+  column.add_child(back)
+  puzzle_back.append(back)
+ puzzle_caption=Label.new()
+ puzzle_caption.text="Pulsa cada disco para girarlo"
+ puzzle_caption.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
+ style_label(puzzle_caption,15,Color("9d8f74"),true)
+ puzzle_box.add_child(puzzle_caption)
  puzzle_submit=Button.new()
  puzzle_submit.text="PROBAR MECANISMO"
  puzzle_submit.custom_minimum_size=Vector2(0,40)
  style_brass_button(puzzle_submit)
  puzzle_submit.pressed.connect(check_puzzle)
- puzzle_box.add_child(puzzle_submit)
+ var actions := HBoxContainer.new()
+ actions.alignment=BoxContainer.ALIGNMENT_CENTER
+ puzzle_box.add_child(actions)
+ actions.add_child(puzzle_submit)
+ puzzle_reset=Button.new()
+ puzzle_reset.text="REINICIAR"
+ style_brass_button(puzzle_reset)
+ puzzle_reset.pressed.connect(reset_puzzle)
+ actions.add_child(puzzle_reset)
+ puzzle_hint_button=Button.new()
+ puzzle_hint_button.text="PISTA"
+ style_brass_button(puzzle_hint_button)
+ puzzle_hint_button.pressed.connect(show_puzzle_hint)
+ actions.add_child(puzzle_hint_button)
  puzzle_feedback=Label.new()
  puzzle_feedback.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
  puzzle_feedback.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
@@ -877,7 +909,7 @@ func draw_exploration_map() -> void:
   map_view.draw_line(Vector2(x,22),Vector2(x,318),Color(ink,0.06))
  for y in range(30,320,30):
   map_view.draw_line(Vector2(22,y),Vector2(578,y),Color(ink,0.06))
- for road: Rect2 in [Rect2(480,405,500,55),Rect2(985,200,600,65),Rect2(985,400,600,65),Rect2(1270,16,48,584)]:
+ for road: Rect2 in [Rect2(480,413,1104,51),Rect2(985,213,599,50),Rect2(985,500,205,50),Rect2(1270,16,48,584)]:
   var r := Rect2(road.position*factor,road.size*factor).intersection(Rect2(14,14,572,311))
   map_view.draw_rect(r,Color(0.47,0.36,0.22,0.30))
   if r.size.x>r.size.y:
@@ -960,6 +992,8 @@ func open_puzzle(index: int) -> void:
   puzzle_title.text=EXTRA_TITLES[index-2]
   puzzle_hint.text=EXTRA_HINTS[index-2]
  puzzle_attempts=0
+ puzzle_hint_level=0
+ puzzle_caption.text=["DISCOS GRABADOS  /  Pulsa para avanzar","CERRADURA  /  Tres cifras","RELOJ  /  Hora · decenas · minutos","ARCHIVO  /  Tres cifras distintas","CIRCUITO  /  Cada pulsación altera el vecino derecho","SELLO  /  Transforma las cifras del archivo"][index]
  wheel_values=[0,0,0]
  puzzle_submit.disabled=false
  puzzle_mechanism.add_theme_stylebox_override("panel", mechanism_style(index))
@@ -1003,7 +1037,7 @@ func check_puzzle() -> void:
   puzzle_mechanism.modulate=Color(1.45,0.55,0.45)
   create_tween().tween_property(puzzle_mechanism,"modulate",Color.WHITE,0.5)
   if puzzle_attempts>=3 and active_puzzle>=2:
-   puzzle_feedback.text=["Formato: una cifra de hora y dos de minutos.","La última cifra es menor que tres.","Prueba el disco central y observa el cambio.","Invierte primero; después suma uno."][active_puzzle-2]
+   puzzle_feedback.text=["Formato: una cifra de hora y dos de minutos.","La suma equivale a seis veces la última cifra.","Prueba el disco central y observa el cambio.","Invierte primero; después suma uno."][active_puzzle-2]
  queue_redraw()
 
 func close_exploration() -> void:
@@ -1014,8 +1048,8 @@ func close_exploration() -> void:
 
 func mechanism_style(index: int) -> StyleBoxFlat:
  var style := StyleBoxFlat.new()
- style.bg_color=Color("2e2016") if index==0 else Color("1f2723")
- style.border_color=UI_BRASS if index==0 else Color("7f8c80")
+ style.bg_color=Color(["2e2016","252b2c","39291c","24333a","172e28","382333"][index])
+ style.border_color=Color(["b08d57","84939a","bca16c","829ca8","80a58a","ad829c"][index])
  style.set_border_width_all(3)
  style.border_width_bottom=5
  style.set_corner_radius_all(10)
@@ -1024,13 +1058,28 @@ func mechanism_style(index: int) -> StyleBoxFlat:
  style.shadow_size=8
  return style
 
-func turn_wheel(index: int) -> void:
+func reset_puzzle() -> void:
+ if active_puzzle<0 or solved[active_puzzle]: return
+ wheel_values=[0,0,0]
+ update_wheels()
+ puzzle_feedback.text="Mecanismo reiniciado."
+ puzzle_feedback.add_theme_color_override("font_color",UI_GOLD)
+
+func show_puzzle_hint() -> void:
+ if active_puzzle<0 or solved[active_puzzle]: return
+ puzzle_hint_level+=1
+ var hints := ["Busca el orden en la carta; no importa cuántas vueltas des.","Primero abre el armario de símbolos.","Una hora tiene sesenta minutos.","Si la última cifra es x, las otras son 2x y 3x.","Empieza desde apagado y observa qué luces cambian juntas.","Invierte las tres cifras del archivo antes de sumar uno."]
+ var more := ["Consulta la carta del inventario.","La nota del armario relaciona tres cantidades con las ruedas.","Escribe la hora seguida de dos cifras de minutos.","La suma de las tres cifras equivale a seis veces la última.","Puedes reiniciar y trabajar de izquierda a derecha.","Aplica el incremento a cada cifra por separado."]
+ puzzle_feedback.text=hints[active_puzzle] if puzzle_hint_level==1 else more[active_puzzle]
+ puzzle_feedback.add_theme_color_override("font_color",UI_GOLD)
+
+func turn_wheel(index: int, direction: int=1) -> void:
  if active_puzzle<0 or solved[active_puzzle]: return
  if active_puzzle==4:
   wheel_values[index]=1-wheel_values[index]
   if index<2: wheel_values[index+1]=1-wheel_values[index+1]
  else:
-  wheel_values[index]=(wheel_values[index]+1)%(SYMBOLS.size() if active_puzzle==0 else 10)
+  wheel_values[index]=posmod(wheel_values[index]+direction,SYMBOLS.size() if active_puzzle==0 else 10)
  update_wheels()
  var wheel := puzzle_wheels[index]
  wheel.modulate=Color("e5c58e")
@@ -1042,12 +1091,17 @@ func update_wheels() -> void:
   wheel.text=""
   wheel.icon=wheel_art(wheel_values[i],active_puzzle==0)
   if active_puzzle==4:
-   wheel.icon=null
-   wheel.text="ENCENDIDO" if wheel_values[i]==1 else "APAGADO"
+   wheel.icon=load("res://assets/puzzles/circuit_%d.png" % wheel_values[i]) as Texture2D
+  if active_puzzle==2:
+   wheel.icon=load("res://assets/puzzles/clock_%d.png" % wheel_values[i]) as Texture2D
   wheel.expand_icon=true
   wheel.icon_alignment=HORIZONTAL_ALIGNMENT_CENTER
   wheel.tooltip_text=SYMBOLS[wheel_values[i]] if active_puzzle==0 else str(wheel_values[i])
   wheel.disabled=solved[active_puzzle]
+  puzzle_back[i].disabled=solved[active_puzzle]
+  puzzle_back[i].visible=active_puzzle!=4
+  puzzle_reset.disabled=solved[active_puzzle]
+  puzzle_hint_button.disabled=solved[active_puzzle]
   for state in ["normal","hover","pressed","disabled","focus"]:
    var style := StyleBoxFlat.new()
    style.bg_color=Color("1d140e") if active_puzzle==0 else Color("141a17")
@@ -1235,6 +1289,7 @@ func toggle_journal() -> void:
 
 func save_progress() -> void:
  var cfg := ConfigFile.new()
+ cfg.set_value("run","difficulty",NightSettings.difficulty)
  cfg.set_value("run","position",player.position)
  cfg.set_value("run","checkpoint",checkpoint)
  cfg.set_value("run","items",inventory_items)
@@ -1253,11 +1308,13 @@ func save_progress() -> void:
  show_message("Partida guardada." if result==OK else "No se pudo guardar.",3.0)
  if journal_open: journal_text.text="Partida guardada." if result==OK else "No se pudo guardar."
 
-func load_progress() -> void:
+func load_progress(from_menu: bool = false) -> void:
  var cfg := ConfigFile.new()
  if cfg.load("user://night_save.cfg")!=OK:
   journal_text.text="No hay una partida guardada."
   return
+ NightSettings.difficulty=clampi(int(cfg.get_value("run","difficulty",1)),0,2)
+ player.flashlight_drain=0.15*[0.65,1.0,1.5][NightSettings.difficulty]
  player.position=cfg.get_value("run","position",Vector2(170,130))
  checkpoint=cfg.get_value("run","checkpoint",Vector2(170,130))
  inventory_items.assign(cfg.get_value("run","items",[]))
@@ -1279,7 +1336,7 @@ func load_progress() -> void:
  rebuild_navigation()
  if found_exit: spawn_encounter()
  refresh_inventory()
- toggle_journal()
+ if not from_menu: toggle_journal()
  show_message("Partida recuperada.",3.0)
 
 

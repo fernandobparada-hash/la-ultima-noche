@@ -1,9 +1,12 @@
 config_version=5
 
 [application]
-config/name="La Última Noche - Capítulo Cero - Alpha 3.7 - Distrito este e interiores"
-run/main_scene="res://scenes/main.tscn"
+config/name="La Última Noche - Capítulo Cero - Alpha 3.9 - Menú"
+run/main_scene="res://scenes/title_menu.tscn"
 config/features=PackedStringArray("4.2", "GL Compatibility")
+
+[autoload]
+NightSettings="*res://scripts/settings.gd"
 
 [display]
 window/size/viewport_width=960

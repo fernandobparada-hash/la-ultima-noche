@@ -303,6 +303,7 @@ func select_weapon(index: int) -> void:
 
 func take_hit(amount: float) -> void:
  if invulnerable>0.0 or dodge_timer>0.0 or health<=0.0: return
+ amount*=NightSettings.damage_factor()
  health = maxf(0.0,health-amount)
  invulnerable = 1.1
  hurt.emit(amount)

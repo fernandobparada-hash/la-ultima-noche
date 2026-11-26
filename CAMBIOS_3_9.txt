@@ -1,0 +1,1 @@
+Alpha 3.9: menú inicial, selección de dificultad, continuar desde guardado, ajustes persistentes de volumen, lluvia, niebla y destellos, guía de controles. Dificultad modifica daño recibido y consumo de linterna. No cambia sprites. No probado en Godot.

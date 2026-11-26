@@ -15,8 +15,9 @@ func _draw() -> void:
  for band in range(11):
   var y := 365.0 + float(band)*23.0 + sin(elapsed*0.18+float(band))*8.0
   var offset := fposmod(elapsed*(6.0+float(band)*1.7)+float(band)*103.0, 700.0)
-  for wisp in range(5):
-   var x := 475.0 + fposmod(offset+float(wisp)*131.0, 540.0)-52.0
+  for wisp in range(10):
+   var x := 475.0 + fposmod(offset+float(wisp)*131.0, 1100.0)-52.0
+   if get_parent().get("weather") != null and get_parent().get("weather").call("sheltered",Vector2(x+60,y)): continue
    var width := 125.0+float((band*3+wisp)%3)*33.0
    var alpha := 0.045+float((band+wisp)%3)*0.012
    draw_rect(Rect2(x,y,width,13.0),Color(0.66,0.74,0.73,alpha))

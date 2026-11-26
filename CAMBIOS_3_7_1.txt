@@ -1,0 +1,2 @@
+3.7.1 — Unión visual de calles
+Textura del distrito este alineada de forma permanente, transición de terreno y asfalto, mapa actualizado. Sin cambios en colisiones ni mecánicas.

@@ -2,7 +2,7 @@
 
 Versión web: https://fernandobparada-hash.github.io/la-ultima-noche/
 
-Desde la Alpha 0.3 (ahora Alpha 3.7) el propio juego detecta si está en PC o en celular y trae sus controles
+Desde la Alpha 0.3 (ahora Alpha 3.9) el propio juego detecta si está en PC o en celular y trae sus controles
 táctiles (`scripts/mobile_controls.gd`), así que ya **no** se usa nada extra en la página web.
 
 ## Qué se añadió para la web (fuera del juego)

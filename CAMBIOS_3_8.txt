@@ -1,0 +1,1 @@
+Alpha 3.8: lluvia variable en ambos barrios, sonido de lluvia y truenos, iluminación ambiental y nuevas farolas. Prueba en Godot pendiente.
