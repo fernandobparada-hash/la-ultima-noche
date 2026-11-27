@@ -75,6 +75,15 @@ var explored: Dictionary = {}
 const PUZZLE_POINTS := [Vector2(430,285),Vector2(760,405),Vector2(627,118),Vector2(867,128),Vector2(672,285),Vector2(882,295)]
 var paper_reader: PanelContainer
 var paper_text: Label
+var document_list: ItemList
+var archive_title: Label
+var archive_preview: Label
+var archive_count: Label
+var archive_kind: Label
+var document_panel: PanelContainer
+var document_keys: Array[String] = []
+var documents: Dictionary = {}
+var document_button: Button
 var took_key := false
 var found_exit := false
 var chapter_complete := false
@@ -444,7 +453,7 @@ func build_hud() -> void:
  canvas.add_child(ui)
  objective=Label.new()
  objective.position=Vector2(20,82)
- objective.add_theme_font_size_override("font_size",15)
+ objective.add_theme_font_size_override("font_size",14)
  objective.add_theme_color_override("font_color",Color("d6c099"))
  canvas.add_child(objective)
  hints=Label.new()
@@ -454,7 +463,7 @@ func build_hud() -> void:
  hints.text="[E] EXAMINAR   [F] LINTERNA   [I] INVENTARIO   [M] MAPA   [ESPACIO] ESQUIVAR"
  canvas.add_child(hints)
  notice=Label.new()
- notice.position=Vector2(20,113)
+ notice.position=Vector2(20,128)
  notice.add_theme_font_size_override("font_size",18)
  notice.add_theme_color_override("font_color",Color("f4dcaa"))
  notice.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
@@ -485,7 +494,7 @@ func build_hud() -> void:
  death_panel.add_child(retry)
  inventory_panel=PanelContainer.new()
  inventory_panel.position=Vector2(160,8)
- inventory_panel.scale=Vector2(0.87,0.87)
+ inventory_panel.scale=Vector2(0.82,0.82)
  inventory_panel.custom_minimum_size=Vector2(702,535)
  inventory_panel.visible=false
  var panel_style := ui_frame_style(Color("111412"),Color("8c7350"),6.0)
@@ -497,7 +506,14 @@ func build_hud() -> void:
  var title := Label.new()
  title.text="  INVENTARIO   ·   MALETA"
  style_label(title,22,UI_GOLD)
- frame.add_child(title)
+ var tabs := HBoxContainer.new()
+ frame.add_child(tabs)
+ tabs.add_child(title)
+ document_button=Button.new()
+ document_button.text="DOCUMENTOS"
+ style_brass_button(document_button)
+ document_button.pressed.connect(open_documents)
+ tabs.add_child(document_button)
  inventory_count_label=Label.new()
  inventory_count_label.add_theme_font_size_override("font_size",12)
  inventory_count_label.add_theme_color_override("font_color",Color("b9ae95"))
@@ -529,6 +545,83 @@ func build_hud() -> void:
  style_brass_button(inventory_use_button)
  inventory_use_button.pressed.connect(use_inventory_selection)
  lower.add_child(inventory_use_button)
+ document_panel=PanelContainer.new()
+ document_panel.position=Vector2(85,30)
+ document_panel.size=Vector2(790,480)
+ document_panel.add_theme_stylebox_override("panel",ui_frame_style(Color("151917"),Color("a78a58"),18.0))
+ canvas.add_child(document_panel)
+ var archive := VBoxContainer.new()
+ archive.add_theme_constant_override("separation",10)
+ document_panel.add_child(archive)
+ var eyebrow := Label.new()
+ eyebrow.text="P R O Y E C T O   U M B R A L     /     ARCHIVO PERSONAL"
+ style_label(eyebrow,14,Color("a99572"))
+ archive.add_child(eyebrow)
+ var header := HBoxContainer.new()
+ archive.add_child(header)
+ var heading := Label.new()
+ heading.text="Documentos recuperados"
+ style_label(heading,32,UI_GOLD)
+ heading.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+ header.add_child(heading)
+ archive_count=Label.new()
+ style_label(archive_count,18,Color("c5b28d"))
+ header.add_child(archive_count)
+ archive.add_child(HSeparator.new())
+ var columns := HBoxContainer.new()
+ columns.add_theme_constant_override("separation",14)
+ columns.size_flags_vertical=Control.SIZE_EXPAND_FILL
+ archive.add_child(columns)
+ document_list=ItemList.new()
+ document_list.custom_minimum_size=Vector2(300,290)
+ document_list.add_theme_font_override("font",UI_FONT)
+ document_list.add_theme_font_size_override("font_size",18)
+ document_list.add_theme_constant_override("v_separation",12)
+ document_list.add_theme_constant_override("icon_margin",10)
+ document_list.fixed_icon_size=Vector2i(26,32)
+ document_list.add_theme_stylebox_override("panel",ui_frame_style(Color("101311"),Color("45483c"),10.0))
+ document_list.add_theme_stylebox_override("selected",ui_frame_style(Color("51412c"),Color("b79a62"),3.0))
+ document_list.add_theme_stylebox_override("selected_focus",ui_frame_style(Color("51412c"),Color("b79a62"),3.0))
+ columns.add_child(document_list)
+ document_list.item_selected.connect(update_archive_preview)
+ document_list.item_activated.connect(read_archive_index)
+ var preview := PanelContainer.new()
+ preview.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+ preview.add_theme_stylebox_override("panel",old_paper_style(30.0))
+ columns.add_child(preview)
+ var page := VBoxContainer.new()
+ page.add_theme_constant_override("separation",10)
+ preview.add_child(page)
+ archive_kind=Label.new()
+ style_label(archive_kind,15,INK)
+ page.add_child(archive_kind)
+ archive_title=Label.new()
+ archive_title.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
+ style_label(archive_title,26,INK)
+ page.add_child(archive_title)
+ page.add_child(HSeparator.new())
+ var scroll := ScrollContainer.new()
+ scroll.size_flags_vertical=Control.SIZE_EXPAND_FILL
+ scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED
+ page.add_child(scroll)
+ archive_preview=Label.new()
+ archive_preview.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+ archive_preview.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
+ style_label(archive_preview,21,INK,true)
+ scroll.add_child(archive_preview)
+ var read_button := Button.new()
+ read_button.text="ABRIR DOCUMENTO"
+ style_brass_button(read_button,true)
+ read_button.pressed.connect(func():
+  var selected := document_list.get_selected_items()
+  if not selected.is_empty(): read_archive_index(selected[0]))
+ page.add_child(read_button)
+ var back := Button.new()
+ back.text="‹  VOLVER A LA MALETA"
+ style_brass_button(back)
+ back.pressed.connect(func(): document_panel.hide())
+ archive.add_child(back)
+ document_panel.hide()
  paper_reader=PanelContainer.new()
  paper_reader.position=Vector2(240,70)
  paper_reader.size=Vector2(480,400)
@@ -547,13 +640,51 @@ func build_hud() -> void:
  var close_paper := Button.new()
  close_paper.text="CERRAR"
  style_brass_button(close_paper,true)
- close_paper.pressed.connect(func(): paper_reader.hide())
+ close_paper.pressed.connect(func():
+  paper_reader.hide()
+  if inventory_open: document_panel.show())
  paper_layout.add_child(close_paper)
  paper_reader.hide()
  refresh_inventory()
 
+func sync_documents() -> void:
+ documents["Carta arrugada"]="Una carta que llevabas contigo al despertar."
+ if read_letter or inventory_items.has("Carta encontrada"):
+  documents["Carta encontrada"]="Para ti. Cuando despiertes. No confíes en todo lo que encuentres. En el armario: luna, sol, estrella. En ese orden."
+ for i in range(MEMORY_TITLES.size()):
+  if memories.has(i): documents[MEMORY_TITLES[i]]=MEMORY_LINES[i]
+ for i in range(BUILDINGS.size()):
+  for j in range(2):
+   if searched_furniture.has("%d:%d" % [i,j]):
+    documents[HOUSE_NAMES[i]+" · "+FURNITURE_NAMES[i][j]]=FURNITURE_NOTES[i][j]
+
+func open_documents() -> void:
+ sync_documents()
+ document_keys.clear()
+ document_list.clear()
+ for key in documents:
+  document_keys.append(str(key))
+  document_list.add_item(str(key),preload("res://assets/inventory_note.png"))
+ archive_count.text="%02d  DOCUMENTOS" % document_keys.size()
+ if not document_keys.is_empty():
+  document_list.select(0)
+  update_archive_preview(0)
+ document_panel.show()
+
+func update_archive_preview(index: int) -> void:
+ if index<0 or index>=document_keys.size(): return
+ var key := document_keys[index]
+ archive_kind.text="REGISTRO %02d  /  %s" % [index+1,"RECUERDO" if key in MEMORY_TITLES else ("CARTA" if key.begins_with("Carta") else "INDICIO")]
+ archive_title.text=key
+ archive_preview.text=str(documents.get(key,""))
+
+func read_archive_index(index: int) -> void:
+ if index>=0 and index<document_keys.size(): open_document(document_keys[index])
+
 func open_document(item: String) -> void:
- paper_text.text=item+"\n\n"+("Para ti. Cuando despiertes. No confíes en todo lo que encuentres. En el armario: luna, sol, estrella. En ese orden." if item=="Carta encontrada" else "Una carta que llevabas contigo al despertar.")
+ sync_documents()
+ paper_text.text=item+"\n\n"+str(documents.get(item,"Documento no disponible."))
+ document_panel.hide()
  paper_reader.show()
 
 func _on_inventory_slot(index: int) -> void:
@@ -563,11 +694,14 @@ func _on_inventory_slot(index: int) -> void:
 func inventory_entries() -> Array[String]:
  var result: Array[String] = []
  for weapon in player.weapons: result.append(weapon)
- for item in inventory_items: result.append(item)
+ for item in inventory_items:
+  if item not in ["Carta arrugada","Carta encontrada"]: result.append(item)
  return result
 
 func refresh_inventory() -> void:
  if inventory_list==null: return
+ sync_documents()
+ document_button.text="DOCUMENTOS (%d)" % documents.size()
  var entries := inventory_entries()
  inventory_selection=clampi(inventory_selection,0,maxi(0,entries.size()-1))
  if inventory_list.selected!=inventory_selection: inventory_list.carrying=false
@@ -677,6 +811,7 @@ func _process(delta: float) -> void:
   return
  if Input.is_action_just_pressed("inventory") and not game_over:
   if paper_reader.visible: paper_reader.hide()
+  document_panel.hide()
   inventory_open=not inventory_open
   inventory_panel.visible=inventory_open
   player.inventory_locked=inventory_open
@@ -684,6 +819,15 @@ func _process(delta: float) -> void:
  if OS.is_debug_build() and Input.is_action_just_pressed("change_enemy") and not game_over and not inventory_open:
   enemy.change_type()
   show_message("Enemigo de prueba: "+enemy.enemy_type,3.0)
+ if inventory_open and Input.is_action_just_pressed("ui_cancel"):
+  if paper_reader.visible:
+   paper_reader.hide()
+   document_panel.show()
+  elif document_panel.visible: document_panel.hide()
+  else:
+   inventory_open=false
+   inventory_panel.hide()
+   player.inventory_locked=false
  if inventory_open:
   for i in range(5):
    if Input.is_key_pressed(KEY_1+i):
@@ -705,13 +849,14 @@ func _process(delta: float) -> void:
   for foe in foes: foe.set_physics_process(false)
   mobile_controls.set_dead(true)
   paper_reader.hide()
+  document_panel.hide()
   close_exploration()
   death_panel.visible=true
   show_message("La oscuridad te alcanza. " + ("Toca REAPARECER." if mobile_controls.is_mobile else "Pulsa R para reaparecer."),999.0)
  if game_over and Input.is_action_just_pressed("restart"):
   respawn_player()
  var status := "INACTIVO" if enemy.defeated else enemy.state
- ui.text="LA ÚLTIMA NOCHE   /   CAPÍTULO I   /   ALPHA 4.3\nVIDA %d   ·   ENERGÍA %d   ·   %s   ·   LINTERNA %s" % [int(player.health),int(player.stamina),(player.weapons[player.weapon_index]+(" · ∞" if player.weapons[player.weapon_index]=="Pistola" else "")),("%d%%" % int(player.flashlight_battery))+ (" ENCENDIDA" if player.light_on else " APAGADA")]
+ ui.text="LA ÚLTIMA NOCHE   /   CAPÍTULO I   /   ALPHA 4.4.1\nVIDA %d   ·   ENERGÍA %d   ·   %s   ·   LINTERNA %s" % [int(player.health),int(player.stamina),(player.weapons[player.weapon_index]+(" · ∞" if player.weapons[player.weapon_index]=="Pistola" else "")),("%d%%" % int(player.flashlight_battery))+ (" ENCENDIDA" if player.light_on else " APAGADA")]
  objective.text=chapter_goal()
  hints.visible=not mobile_controls.is_mobile
  if player.position.x>500.0 and player.position.y>355.0 and not found_exit:
@@ -806,10 +951,7 @@ func interact() -> void:
   if not inventory_items.has("Carta encontrada"):
    inventory_items.append("Carta encontrada")
   refresh_inventory()
-  inventory_open=true
-  inventory_panel.show()
-  player.inventory_locked=true
-  open_document("Carta encontrada")
+  show_message("Carta recogida. Consulta Inventario > Documentos.",4.0)
  elif player.position.distance_to(Vector2(365,290))<43.0 and not took_key:
   took_key=true
   inventory_items.append("Llave antigua")
@@ -1072,9 +1214,11 @@ func draw_exploration_map() -> void:
  map_view.draw_string(font,lg.position+Vector2(26,55),"Resuelto",HORIZONTAL_ALIGNMENT_LEFT,-1,14,ink)
  # Marcador del jugador con pulso.
  var t := float(Time.get_ticks_msec())/1000.0
- if chapter_ready() and not chapter_complete:
-  map_view.draw_circle(CHAPTER_END*factor,6.0,Color("b08d57"))
-  map_view.draw_string(font,CHAPTER_END*factor+Vector2(9,-5),"Umbral",HORIZONTAL_ALIGNMENT_LEFT,-1,13,ink)
+ if not chapter_complete:
+  var target := next_goal_position()*factor
+  map_view.draw_arc(target,12.0+sin(t*2.0)*2.0,0,TAU,32,Color("d9b56d"),2.0)
+  map_view.draw_circle(target,3.0,Color("d9b56d"))
+  map_view.draw_string(font,target+Vector2(9,-10),"Objetivo",HORIZONTAL_ALIGNMENT_LEFT,-1,13,Color("d9b56d"))
  var pp: Vector2=player.position*factor
  var pulse := fmod(t*0.9,1.0)
  map_view.draw_arc(pp,5.0+pulse*12.0,0.0,TAU,24,Color(0.69,0.19,0.16,0.7*(1.0-pulse)),2.0)
@@ -1389,6 +1533,9 @@ func toggle_journal() -> void:
 func save_progress() -> void:
  var cfg := ConfigFile.new()
  cfg.set_value("run","chapter_complete",chapter_complete)
+ cfg.set_value("run","elapsed",world_time)
+ cfg.set_value("run","weapon",player.weapon_index)
+ cfg.set_value("run","stamina",player.stamina)
  cfg.set_value("run","knocks",knocks_triggered)
  cfg.set_value("run","difficulty",NightSettings.difficulty)
  cfg.set_value("run","position",player.position)
@@ -1415,6 +1562,10 @@ func load_progress(from_menu: bool = false) -> void:
   journal_text.text="No hay una partida guardada."
   return
  chapter_complete=bool(cfg.get_value("run","chapter_complete",false))
+ world_time=maxf(0.0,float(cfg.get_value("run","elapsed",0.0)))
+ player.select_weapon(clampi(int(cfg.get_value("run","weapon",0)),0,player.weapons.size()-1))
+ player.stamina=clampf(float(cfg.get_value("run","stamina",100.0)),0,100)
+ documents.clear()
  knocks_triggered=bool(cfg.get_value("run","knocks",false))
  NightSettings.difficulty=clampi(int(cfg.get_value("run","difficulty",1)),0,2)
  player.flashlight_drain=0.15*[0.65,1.0,1.5][NightSettings.difficulty]
@@ -1481,16 +1632,23 @@ func build_memory_ui() -> void:
 
 func open_memory(index: int) -> void:
  if memory_open or game_over: return
- memories[index]=true
  memory_open=true
  player.inventory_locked=true
  player.velocity=Vector2.ZERO
+ player.set_physics_process(false)
  for foe in foes: foe.set_physics_process(false)
- memory_title.text=MEMORY_TITLES[index]
- memory_text.text=MEMORY_LINES[index]
- memory_panel.modulate.a=0.0
- memory_panel.show()
- create_tween().tween_property(memory_panel,"modulate:a",1.0,0.45)
+ var scene = preload("res://scripts/playable_memory.gd").new()
+ memory_panel.get_parent().add_child(scene)
+ scene.setup(index,MEMORY_TITLES[index])
+ scene.completed.connect(func(): finish_playable_memory(scene,index,true))
+ scene.cancelled.connect(func(): finish_playable_memory(scene,index,false))
+
+func finish_playable_memory(scene: Control,index: int,completed: bool) -> void:
+ scene.queue_free()
+ player.set_physics_process(true)
+ if completed: memories[index]=true
+ close_memory()
+ if not completed: show_message("Recuerdo interrumpido. Puedes volver a examinarlo.",3.0)
 
 func close_memory() -> void:
  var finished := chapter_ending
@@ -1501,7 +1659,6 @@ func close_memory() -> void:
  for foe in foes: foe.set_physics_process(true)
  if finished:
   chapter_complete=true
-  checkpoint=player.position
   save_progress()
   show_end_panel()
  else:
@@ -1512,7 +1669,9 @@ func show_end_panel() -> void:
  player.inventory_locked=true
  player.velocity=Vector2.ZERO
  for foe in foes: foe.set_physics_process(false)
- end_stats.text="Mecanismos resueltos: %d / 6\nRecuerdos recuperados: %d / 4\nRefugios visitados: %d / 9" % [solved.count(true),memories.size(),visited_houses.size()]
+ sync_documents()
+ end_stats.text="Tiempo: %02d:%02d · Documentos: %d\n" % [floori(world_time/60.0),int(world_time)%60,documents.size()]
+ end_stats.text+="Mecanismos resueltos: %d / 6\nRecuerdos recuperados: %d / 4\nRefugios visitados: %d / 9" % [solved.count(true),memories.size(),visited_houses.size()]
  end_panel.modulate.a=0.0
  end_panel.show()
  create_tween().tween_property(end_panel,"modulate:a",1.0,0.8)
@@ -1536,7 +1695,7 @@ func build_end_panel() -> void:
  end_panel.size=Vector2(960,540)
  layer.add_child(end_panel)
  var box := VBoxContainer.new()
- box.position=Vector2(230,120)
+ box.position=Vector2(230,88)
  box.size=Vector2(500,320)
  box.add_theme_constant_override("separation",18)
  end_panel.add_child(box)
@@ -1594,3 +1753,13 @@ func open_chapter_ending() -> void:
  memory_panel.modulate.a=0.0
  memory_panel.show()
  create_tween().tween_property(memory_panel,"modulate:a",1.0,0.45)
+
+func next_goal_position() -> Vector2:
+ if not read_letter: return Vector2(190,155)
+ if not took_key: return Vector2(365,290)
+ if not door_open: return Vector2(237,345)
+ for i in range(PUZZLE_POINTS.size()):
+  if not solved[i]: return PUZZLE_POINTS[i]
+ for i in range(4):
+  if not memories.has(i): return room_furniture([3,6,5,4][i],1).get_center()
+ return CHAPTER_END

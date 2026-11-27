@@ -1,0 +1,1 @@
+Alpha 4.4.1: archivo de documentos a dos columnas, vista previa en pergamino, iconos, contador y clasificación. Sin cambios en recogida ni guardado. Sin prueba de ejecución.

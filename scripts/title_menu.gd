@@ -3,7 +3,7 @@ extends Control
 # Fondo animado (deriva lenta, niebla, lluvia, relámpagos), protagonista en reposo,
 # título con parpadeo, navegación por teclado/mando, transición de entrada y salida.
 
-const VERSION_TEXT := "CAPÍTULO I  /  ALPHA 4.3"
+const VERSION_TEXT := "CAPÍTULO I  /  ALPHA 4.4"
 const GOLD := Color("e0c9a4")
 const GOLD_DIM := Color(0.62, 0.55, 0.42, 1.0)
 

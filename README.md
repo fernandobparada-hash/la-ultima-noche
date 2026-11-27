@@ -1,4 +1,4 @@
-# LA ÚLTIMA NOCHE — Capítulo I · Alpha 4.3
+# LA ÚLTIMA NOCHE — Capítulo I · Alpha 4.4
 
 Proyecto Godot 4.2+ (GL Compatibility). Abrir `project.godot` con Importar y ejecutar con F5.
 

@@ -1,0 +1,8 @@
+Alpha 4.4 — Archivo de documentos y orientación
+- La carta se recoge sin abrir la maleta ni el lector.
+- Archivo accesible desde la maleta: cartas, recuerdos y pistas de muebles, reconstruidos a partir de los datos guardados. No ocupan casillas.
+- Marcador del siguiente objetivo en el mapa, sin revelar códigos.
+- Pantalla final existente ampliada con tiempo y documentos; conserva el refugio como punto de retorno.
+- Guardado de tiempo, arma y resistencia; valores por defecto para partidas anteriores.
+- Nombre interno del proyecto conservado para mantener la carpeta de guardado 4.3.
+- Revisión estática y comprobación ZIP; sin ejecución Godot ni prueba móvil.
