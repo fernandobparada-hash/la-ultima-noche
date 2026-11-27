@@ -140,11 +140,13 @@ const FURNITURE := [
 func _ready() -> void:
  RenderingServer.set_default_clear_color(Color("10161b"))
  scale=Vector2.ONE*WORLD_SCALE
+ texture_filter=CanvasItem.TEXTURE_FILTER_LINEAR
  build_world()
  rebuild_navigation()
  player = PlayerScript.new()
  player.position = Vector2(170,130)
  add_child(player)
+ player.texture_filter=CanvasItem.TEXTURE_FILTER_NEAREST
  player.scale=Vector2.ONE/WORLD_SCALE
  player.get_node("Camera2D").zoom=Vector2(0.9,0.9)
  player.attacked.connect(_on_player_attack)
@@ -156,6 +158,7 @@ func _ready() -> void:
  enemy.target = player
  enemy.omen.connect(_on_omen)
  add_child(enemy)
+ enemy.texture_filter=CanvasItem.TEXTURE_FILTER_NEAREST
  enemy.scale=Vector2.ONE/WORLD_SCALE
  foes.append(enemy)
  setup_audio()
@@ -320,22 +323,98 @@ func build_vignette() -> void:
  layer.add_child(rect)
  add_child(layer)
 
+# Farolas: posiciones exactas de las cabezas de farola pintadas en ground.png.
+const STREET_LAMPS := [
+ Vector2(85.8,380.2),Vector2(340.8,380.2),Vector2(589.8,380.2),Vector2(844.8,380.2),
+ Vector2(1099.8,207.8),Vector2(1229.8,207.8),Vector2(1369.8,207.8),Vector2(1499.8,207.8),
+ Vector2(1265.8,131.8),Vector2(1265.8,331.8),Vector2(1323.8,331.8),
+ Vector2(1099.8,469.8),Vector2(1229.8,469.8),Vector2(1499.8,469.8),Vector2(1265.8,571.8)
+]
+const FLAKY_LAMPS := [3,9,13]
+var lamp_base: Array[float] = []
+var lamp_core: Array[PointLight2D] = []
+var siren_red: Array[PointLight2D] = []
+var siren_blue: Array[PointLight2D] = []
+var ambient_color := Color("68717a")
+
+func make_soft_light(size: int, power: float) -> Texture2D:
+ var img := Image.create(size,size,false,Image.FORMAT_RGBA8)
+ var c := (size-1)*0.5
+ for y in range(size):
+  for x in range(size):
+   var d := Vector2(x-c,y-c).length()/c
+   var v := pow(maxf(0.0,1.0-d),power)
+   img.set_pixel(x,y,Color(1,1,1,v))
+ return ImageTexture.create_from_image(img)
+
+func add_light(pos: Vector2, tex: Texture2D, scale_value: float, energy_value: float, tint: Color) -> PointLight2D:
+ var l := PointLight2D.new()
+ l.texture=tex
+ l.texture_scale=scale_value
+ l.energy=energy_value
+ l.color=tint
+ l.position=pos
+ add_child(l)
+ return l
+
 func build_lighting() -> void:
  build_vignette()
  var shade := CanvasModulate.new()
- shade.color=Color("68717a")
+ shade.color=ambient_color
  atmosphere_shade=shade
  add_child(shade)
- var glow := make_glow()
- for location in [Vector2(185,158),Vector2(350,175),Vector2(590,405),Vector2(845,405),Vector2(1290,235),Vector2(1290,435),Vector2(1450,500),Vector2(1040,430),Vector2(1200,430),Vector2(1510,430)]:
-  var lamp := PointLight2D.new()
-  lamp.texture=glow
-  lamp.texture_scale=1.7 if location.x<500.0 else 2.3
-  lamp.energy=0.65 if location.x<500.0 else 0.85
-  lamp.color=Color("f2c78e")
-  lamp.position=location
-  add_child(lamp)
+ var wide := make_soft_light(128,1.6)   # charco de luz amplio y suave
+ var core := make_soft_light(64,2.6)    # núcleo brillante en la lámpara
+ for i in range(STREET_LAMPS.size()):
+  var pos: Vector2 = STREET_LAMPS[i]
+  var lamp := add_light(pos+Vector2(0,10),wide,2.15,0.95,Color("f4c98f"))
   lamps.append(lamp)
+  lamp_base.append(0.95)
+  lamp_core.append(add_light(pos,core,0.55,0.9,Color("ffe3b0")))
+ # Luz interior cálida en las dos habitaciones de la casa inicial
+ var warm := Color("f0b878")
+ lamps.append(add_light(Vector2(185,158),wide,1.5,0.6,warm))
+ lamp_base.append(0.6)
+ lamps.append(add_light(Vector2(350,175),wide,1.5,0.6,warm))
+ lamp_base.append(0.6)
+ # Hospital (cruz roja), iglesia, supermercado: luz de ambiente de cada edificio
+ add_light(Vector2(1110,138),wide,1.6,0.38,Color("e07a72"))
+ add_light(Vector2(1440,138),wide,1.5,0.22,Color("9aa8d8"))
+ add_light(Vector2(1295,440),wide,1.8,0.28,Color("a8d8b8"))
+ # Sirenas de la comisaría (rojo y azul alternos)
+ for x in [1072.8,1132.8,1192.8]:
+  siren_red.append(add_light(Vector2(x,381),wide,1.0,0.0,Color("ff3a3a")))
+ for x in [1102.8,1162.8,1222.8]:
+  siren_blue.append(add_light(Vector2(x,381),wide,1.0,0.0,Color("4a78ff")))
+
+func update_lighting(delta: float) -> void:
+ var n := STREET_LAMPS.size()
+ for i in range(lamps.size()):
+  var base: float = lamp_base[i]
+  var wobble := 0.94+0.06*sin(world_time*2.1+float(i)*3.0)
+  var f := 1.0
+  if i<n and FLAKY_LAMPS.has(i):
+   # farola en mal estado: parpadea de forma irregular
+   var g := sin(world_time*13.0+float(i))*sin(world_time*5.3+float(i)*2.0)
+   f=0.35+0.65*smoothstep(-0.2,0.5,g)
+  if flicker>0.0:
+   f*=0.55+0.45*absf(sin(world_time*19.0))
+  lamps[i].energy=base*wobble*f
+  if i<n: lamp_core[i].energy=0.9*wobble*f
+ var phase := sin(world_time*2.4)
+ for l in siren_red: l.energy=0.55*smoothstep(0.1,0.9,phase)
+ for l in siren_blue: l.energy=0.55*smoothstep(0.1,0.9,-phase)
+ # El ambiente se calienta ligeramente dentro de los edificios.
+ var inside := false
+ if is_instance_valid(player):
+  if Rect2(40,40,430,310).has_point(player.position): inside=true
+  else:
+   for a: Rect2 in BUILDINGS:
+    if a.has_point(player.position):
+     inside=true
+     break
+ var target := Color("76726c") if inside else Color("68717a")
+ ambient_color=ambient_color.lerp(target,clampf(delta*2.5,0.0,1.0))
 
 func build_hud() -> void:
  var canvas := CanvasLayer.new()
@@ -538,6 +617,7 @@ func use_inventory_selection() -> void:
 func respawn_player() -> void:
  if game_over:
   player.position=checkpoint
+  player.get_node("Camera2D").reset_smoothing()
   player.velocity=Vector2.ZERO
   player.health=100.0
   player.stamina=100.0
@@ -560,7 +640,8 @@ func _process(delta: float) -> void:
  var outdoors := not bool(weather.call("sheltered",player.position))
  weather.set("outside",outdoors)
  var storm_flash := float(weather.get("flash")) if NightSettings.flashes else 0.0
- atmosphere_shade.color=Color("68717a").lerp(Color("aebdcb"),storm_flash)
+ update_lighting(delta)
+ atmosphere_shade.color=ambient_color.lerp(Color("aebdcb"),storm_flash)
  ambience.volume_db=move_toward(ambience.volume_db,-24.0 if outdoors else -31.0,delta*5.0)
  if door_opening:
   door_progress=minf(1.0,door_progress+delta/0.85)
@@ -616,18 +697,13 @@ func _process(delta: float) -> void:
  if game_over and Input.is_action_just_pressed("restart"):
   respawn_player()
  var status := "INACTIVO" if enemy.defeated else enemy.state
- ui.text="LA ÚLTIMA NOCHE   /   CAPÍTULO CERO   /   ALPHA 3.9\nVIDA %d   ·   ENERGÍA %d   ·   %s   ·   LINTERNA %s" % [int(player.health),int(player.stamina),(player.weapons[player.weapon_index]+(" · ∞" if player.weapons[player.weapon_index]=="Pistola" else "")),("%d%%" % int(player.flashlight_battery))+ (" ENCENDIDA" if player.light_on else " APAGADA")]
+ ui.text="LA ÚLTIMA NOCHE   /   CAPÍTULO CERO   /   ALPHA 4.1\nVIDA %d   ·   ENERGÍA %d   ·   %s   ·   LINTERNA %s" % [int(player.health),int(player.stamina),(player.weapons[player.weapon_index]+(" · ∞" if player.weapons[player.weapon_index]=="Pistola" else "")),("%d%%" % int(player.flashlight_battery))+ (" ENCENDIDA" if player.light_on else " APAGADA")]
  objective.text="[I] INVENTARIO   [ESPACIO] ESQUIVAR   [M] MAPA  /  %s" % ["Explora la calle y evita al Errante" if found_exit else ("Abre la puerta de salida" if took_key else "Busca la llave en la cocina")]
  if player.position.x>500.0 and player.position.y>355.0 and not found_exit:
   found_exit=true
   spawn_encounter()
   show_message("Has salido al barrio residencial. El Errante patrulla la calle.",5.0)
- for i in range(lamps.size()):
-  lamps[i].energy=(0.65 if i<2 else 0.85)*(0.94+0.06*sin(world_time*2.1+float(i)*3.0))*(0.55+0.45*absf(sin(world_time*19.0)) if flicker>0.0 else 1.0)
- redraw_accum += delta
- if redraw_accum>=0.05:
-  redraw_accum=0.0
-  queue_redraw()
+ queue_redraw() # cada fotograma: animaciones suaves (puertas, pulsos, disparos)
 
 func _on_player_attack(origin: Vector2,direction: Vector2,reach: float,damage: float) -> void:
  for foe in foes:
@@ -764,11 +840,6 @@ func _draw() -> void:
   draw_rect(Rect2(point-Vector2(8,6),Vector2(16,12)),Color("a08b60"),false,1.0)
   if i>=2 and not BUILDINGS[i-2].has_point(player.position): continue
   draw_circle(point,3.0,Color("73917b") if solved[i] else Color("d1b578"))
- # Small fog wisps, deliberately subtle.
- for i in range(7):
-  var px := 490.0+fmod(float(i*107)+world_time*7.0,470.0)
-  var py := 400.0+float(i*27)
-  draw_arc(Vector2(px,py),22.0,0.3,2.7,12,Color(0.71,0.77,0.75,0.075),2.0)
  if tracer_lifetime>0.0:
   var alpha := tracer_lifetime/0.13
   draw_line(tracer_start,tracer_end,Color(1.0,0.91,0.63,alpha),2.0,true)
@@ -1316,6 +1387,7 @@ func load_progress(from_menu: bool = false) -> void:
  NightSettings.difficulty=clampi(int(cfg.get_value("run","difficulty",1)),0,2)
  player.flashlight_drain=0.15*[0.65,1.0,1.5][NightSettings.difficulty]
  player.position=cfg.get_value("run","position",Vector2(170,130))
+ player.get_node("Camera2D").reset_smoothing()
  checkpoint=cfg.get_value("run","checkpoint",Vector2(170,130))
  inventory_items.assign(cfg.get_value("run","items",[]))
  player.health=clampf(float(cfg.get_value("run","health",100)),1,100)

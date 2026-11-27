@@ -1,0 +1,5 @@
+Alpha 4.1: mundo mas bonito y fluido. Sin prueba de ejecucion en Godot.
+Calle: ground.png rehecho en la union oeste/este (sin linea vertical, sin casas fantasma ni rayas duplicadas, tono de hierba continuo) y la calle del oeste se extiende hasta el borde izquierdo, conectada con el camino de la puerta de la casa.
+Iluminacion: las luces estaban desplazadas respecto a las farolas pintadas; ahora cada farola tiene su luz exacta (15), con nucleo brillante, algunas con parpadeo irregular. Luz calida en las habitaciones de la casa inicial, resplandor del hospital, iglesia y supermercado, sirenas rojas/azules alternas en la comisaria, ambiente algo mas calido dentro de los edificios.
+Fluidez: lluvia con particulas (antes 340 gotas calculadas en GDScript por imagen), niebla con sprites suaves que se mueven cada fotograma (antes rectangulos a 15 Hz), dibujo del mundo cada fotograma (antes 20 Hz), camara con suavizado, filtro lineal en el mundo para evitar el parpadeo de pixeles al reducir la textura 2x, sprites de personajes siguen nitidos.
+Archivos: scripts/main.gd, weather.gd, fog.gd, player.gd, assets/ground.png.

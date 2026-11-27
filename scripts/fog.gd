@@ -1,28 +1,65 @@
 extends Node2D
 class_name NightFog
+# Niebla con sprites suaves que derivan despacio (movimiento fluido en cada fotograma).
+var wisps: Array[Sprite2D] = []
+var speeds: Array[float] = []
+var phases: Array[float] = []
+var base_y: Array[float] = []
 var elapsed := 0.0
-var redraw_accum := 0.0
+
+func make_fog_texture() -> Texture2D:
+ var w := 128
+ var h := 64
+ var img := Image.create(w,h,false,Image.FORMAT_RGBA8)
+ var rng := RandomNumberGenerator.new()
+ rng.seed = 7
+ var blobs: Array = []
+ for i in range(9):
+  blobs.append(Vector3(rng.randf_range(0.2,0.8),rng.randf_range(0.3,0.7),rng.randf_range(0.18,0.34)))
+ for y in range(h):
+  for x in range(w):
+   var u := float(x)/float(w-1)
+   var v := float(y)/float(h-1)
+   var a := 0.0
+   for b: Vector3 in blobs:
+    var d := Vector2((u-b.x)*2.0,(v-b.y)*4.0).length()/b.z
+    a = maxf(a, pow(maxf(0.0,1.0-d),1.5))
+   # bordes totalmente transparentes para que no se vean cortes
+   var edge := minf(minf(u,1.0-u)*5.0,minf(v,1.0-v)*5.0)
+   a *= clampf(edge,0.0,1.0)
+   img.set_pixel(x,y,Color(0.70,0.78,0.78,a))
+ return ImageTexture.create_from_image(img)
+
 func _ready() -> void:
  z_index = 9
+ var tex := make_fog_texture()
+ var rng := RandomNumberGenerator.new()
+ rng.seed = 11
+ var count := 0
+ while count < 20:
+  var pos := Vector2(rng.randf_range(0.0,1600.0),rng.randf_range(150.0,590.0))
+  # Más niebla en la calle, menos entre las casas del oeste; ninguna dentro de la casa inicial.
+  if Rect2(40,40,430,310).has_point(pos): continue
+  var sp := Sprite2D.new()
+  sp.texture = tex
+  sp.centered = true
+  sp.scale = Vector2(rng.randf_range(3.2,5.2),rng.randf_range(2.6,4.0))
+  var alpha := rng.randf_range(0.10,0.20)
+  if pos.y > 360.0: alpha += 0.04
+  sp.modulate = Color(1,1,1,alpha)
+  sp.position = pos
+  sp.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+  add_child(sp)
+  wisps.append(sp)
+  speeds.append(rng.randf_range(4.0,12.0))
+  phases.append(rng.randf_range(0.0,TAU))
+  base_y.append(pos.y)
+  count += 1
+
 func _process(delta: float) -> void:
  elapsed += delta
- redraw_accum += delta
- if redraw_accum >= 0.066:
-  redraw_accum = 0.0
-  queue_redraw()
-func _draw() -> void:
- # Niebla más densa en la calle; no tapa por completo la silueta del Errante.
- for band in range(11):
-  var y := 365.0 + float(band)*23.0 + sin(elapsed*0.18+float(band))*8.0
-  var offset := fposmod(elapsed*(6.0+float(band)*1.7)+float(band)*103.0, 700.0)
-  for wisp in range(10):
-   var x := 475.0 + fposmod(offset+float(wisp)*131.0, 1100.0)-52.0
-   if get_parent().get("weather") != null and get_parent().get("weather").call("sheltered",Vector2(x+60,y)): continue
-   var width := 125.0+float((band*3+wisp)%3)*33.0
-   var alpha := 0.045+float((band+wisp)%3)*0.012
-   draw_rect(Rect2(x,y,width,13.0),Color(0.66,0.74,0.73,alpha))
-   draw_rect(Rect2(x+15,y-7,width*0.77,7.0),Color(0.69,0.76,0.75,alpha*0.68))
-   draw_rect(Rect2(x+29,y+13,width*0.53,7.0),Color(0.67,0.74,0.73,alpha*0.61))
- for i in range(5):
-  var x := 55.0 + fposmod(elapsed*4.0+float(i)*109.0,415.0)
-  draw_rect(Rect2(x,299.0+sin(elapsed*0.3+float(i))*5.0,94,6),Color(0.67,0.73,0.72,0.055))
+ for i in range(wisps.size()):
+  var sp := wisps[i]
+  sp.position.x += speeds[i]*delta
+  if sp.position.x > 1760.0: sp.position.x = -160.0
+  sp.position.y = base_y[i] + sin(elapsed*0.2+phases[i])*9.0

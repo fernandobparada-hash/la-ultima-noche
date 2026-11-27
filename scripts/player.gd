@@ -122,8 +122,8 @@ func _ready() -> void:
  add_child(shape)
  var camera := Camera2D.new()
  camera.enabled = true
- camera.position_smoothing_enabled = false
- camera.position_smoothing_speed = 7.0
+ camera.position_smoothing_enabled = true # movimiento de cámara fluido en pantallas de alta frecuencia
+ camera.position_smoothing_speed = 14.0
  camera.name = "Camera2D"
  add_child(camera)
  light = PointLight2D.new()

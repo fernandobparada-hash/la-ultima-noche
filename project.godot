@@ -1,7 +1,7 @@
 config_version=5
 
 [application]
-config/name="La Última Noche - Capítulo Cero - Alpha 4.0 - Menú mejorado"
+config/name="La Última Noche - Capítulo Cero - Alpha 4.1 - Mundo mejorado"
 run/main_scene="res://scenes/title_menu.tscn"
 config/features=PackedStringArray("4.2", "GL Compatibility")
 
