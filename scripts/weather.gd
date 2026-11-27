@@ -12,6 +12,7 @@ var rain_fx: CPUParticles2D
 var rain_fade := 0.0
 var ripple_points: Array[Vector2] = []
 var buildings: Array = []
+var ripples_visible := false
 
 func make_streak() -> Texture2D:
  var img := Image.create(3,18,false,Image.FORMAT_RGBA8)
@@ -40,7 +41,7 @@ func _ready() -> void:
  if get_parent() != null and get_parent().get("player") != null:
   cam = get_parent().get("player").get_node_or_null("Camera2D")
  rain_fx=CPUParticles2D.new()
- rain_fx.amount=300
+ rain_fx.amount=150 if OS.has_feature("mobile") else 300
  rain_fx.lifetime=0.8
  rain_fx.preprocess=0.8
  rain_fx.local_coords=false
@@ -64,7 +65,7 @@ func _ready() -> void:
  else:
   add_child(rain_fx)
  # Charcos: posiciones fijas en la calle, sin tejados encima.
- for i in range(30):
+ for i in range(16 if OS.has_feature("mobile") else 30):
   var p := Vector2(30+float((i*97)%1540),418+float((i*53)%43))
   if not sheltered(p):
    ripple_points.append(p)
@@ -89,7 +90,11 @@ func _process(delta: float) -> void:
  if rain_fx != null:
   rain_fx.modulate.a=rain_fade
   rain_fx.emitting=rain_fade>0.02
- queue_redraw()
+ if enabled and outside:
+  queue_redraw()
+ elif ripples_visible:
+  queue_redraw()
+ ripples_visible=enabled and outside
 func sheltered(p: Vector2) -> bool:
  if Rect2(40,40,430,310).has_point(p): return true
  for area: Rect2 in buildings:

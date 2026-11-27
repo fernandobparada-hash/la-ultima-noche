@@ -1,4 +1,4 @@
-# LA ÚLTIMA NOCHE — Capítulo I · Alpha 4.4
+# LA ÚLTIMA NOCHE — Capítulo I · Alpha 4.7
 
 Proyecto Godot 4.2+ (GL Compatibility). Abrir `project.godot` con Importar y ejecutar con F5.
 
@@ -13,3 +13,11 @@ En móvil hay controles táctiles en pantalla.
 
 ## Estado
 Nunca se ha ejecutado en el entorno de desarrollo asistido: si Godot muestra un error, anotar la línea y corregirla.
+
+## Módulos nuevos
+- chapter_progress.gd: objetivos declarativos.
+- save_store.gd: lectura, escritura y copia del guardado anterior.
+- light_textures.gd: generación de texturas de iluminación.
+
+## Alpha 4.7
+Controles táctiles: mapa, cierre de maleta, bloqueo durante paneles y joystick limitado a su zona. Menos partículas y niebla en móvil. Mantiene proporción 16:9.

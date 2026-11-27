@@ -12,6 +12,8 @@ NightSettings="*res://scripts/settings.gd"
 window/size/viewport_width=960
 window/size/viewport_height=540
 window/stretch/mode="canvas_items"
+window/stretch/aspect="keep"
+window/handheld/orientation=0
 
 [rendering]
 renderer/rendering_method="gl_compatibility"

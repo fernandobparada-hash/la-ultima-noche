@@ -1,0 +1,1 @@
+Alpha 4.5: extracción parcial de objetivos, persistencia y texturas de luz. Copia de seguridad del guardado previo. Sin prueba de ejecución en Godot.

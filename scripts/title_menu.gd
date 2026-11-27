@@ -3,7 +3,7 @@ extends Control
 # Fondo animado (deriva lenta, niebla, lluvia, relámpagos), protagonista en reposo,
 # título con parpadeo, navegación por teclado/mando, transición de entrada y salida.
 
-const VERSION_TEXT := "CAPÍTULO I  /  ALPHA 4.4"
+const VERSION_TEXT := "CAPÍTULO I  /  ALPHA 4.7"
 const GOLD := Color("e0c9a4")
 const GOLD_DIM := Color(0.62, 0.55, 0.42, 1.0)
 
@@ -325,7 +325,7 @@ func home() -> void:
 	panel.add_child(line)
 	spacer(6)
 	var cfg := ConfigFile.new()
-	var has_save := cfg.load("user://night_save.cfg") == OK
+	var has_save := preload("res://scripts/save_store.gd").read(cfg) == OK
 	var done := has_save and bool(cfg.get_value("run","chapter_complete",false))
 	var resume := button("Continuar  ·  Capítulo I completado" if done else "Continuar", start.bind(true))
 	resume.disabled = not has_save

@@ -1,0 +1,2 @@
+Alpha 4.7
+Mapa táctil sustituye botón de prueba; cierre de maleta; bloqueo de controles durante paneles; joystick limitado a su zona; sin activación al deslizar entre botones. Menos partículas y niebla en móvil; niebla desactivada no procesa; charcos no se redibujan cuando ocultos; mapa estático mientras abierto; revelado solo al cambiar de celda. Proporción 16:9. Sin prueba de ejecución: Godot no instalado.

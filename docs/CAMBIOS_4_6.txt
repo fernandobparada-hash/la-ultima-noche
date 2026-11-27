@@ -1,0 +1,1 @@
+Alpha 4.6: audio sintetizado original, pasos por superficie, música cruzada, efectos de interacción. Sin prueba de ejecución en Godot.

@@ -8,6 +8,7 @@ var is_mobile := false
 var touch_buttons: Array[TouchScreenButton] = []
 var respawn: Button
 var game_over := false
+var blocked := false
 var status: Label
 var joystick_vector := Vector2.ZERO
 var joystick_pointer := -1
@@ -38,7 +39,7 @@ func build_controls() -> void:
  add_touch("switch_weapon", "ARMA", Vector2(720,345), 14)
  add_touch("dodge", "ESQUIVAR", Vector2(604,450), 12)
  add_touch("inventory", "BOLSA", Vector2(605,345), 13)
- add_touch("change_enemy", "ENEMIGO", Vector2(600,240), 11)
+ add_touch("map", "MAPA", Vector2(600,240), 16)
  respawn = Button.new()
  respawn.text = "REAPARECER"
  respawn.position = Vector2(350,315)
@@ -60,7 +61,7 @@ func add_touch(action_name: String, title: String, at: Vector2, font_size: int =
  button.texture_pressed = PRESSED
  button.visibility_mode = TouchScreenButton.VISIBILITY_ALWAYS
  button.position = at
- button.passby_press = true
+ button.passby_press = false
  add_child(button)
  var label := Label.new()
  label.text=title
@@ -77,15 +78,20 @@ func add_touch(action_name: String, title: String, at: Vector2, font_size: int =
 func set_mobile(enabled: bool) -> void:
  is_mobile=enabled
  for button in touch_buttons:
-  button.visible=is_mobile and not game_over
+  button.visible=is_mobile and not game_over and not blocked
  respawn.visible=false
  status.visible=false
- joystick_layer.visible=is_mobile and not game_over
+ joystick_layer.visible=is_mobile and not game_over and not blocked
  if not joystick_layer.visible:
   joystick_vector=Vector2.ZERO
   joystick_pointer=-1
   joystick_active=false
  joystick_layer.queue_redraw()
+
+func set_blocked(value: bool) -> void:
+ if blocked == value: return
+ blocked=value
+ set_mobile(is_mobile)
 
 func set_dead(dead: bool) -> void:
  game_over=dead
@@ -97,10 +103,10 @@ func _unhandled_key_input(event: InputEvent) -> void:
   get_viewport().set_input_as_handled()
 
 func _input(event: InputEvent) -> void:
- if not is_mobile or game_over: return
+ if not is_mobile or game_over or blocked: return
  if event is InputEventScreenTouch:
   var touch := event as InputEventScreenTouch
-  if touch.pressed and joystick_pointer == -1 and touch.position.x < 300.0 and touch.position.y > 265.0:
+  if touch.pressed and joystick_pointer == -1 and touch.position.distance_to(joystick_center) < joystick_radius+24.0:
    joystick_pointer = touch.index
    joystick_active = true
    _move_stick(touch.position)
@@ -120,7 +126,7 @@ func _input(event: InputEvent) -> void:
  elif event is InputEventMouseButton and OS.has_feature("mobile") == false:
   var mouse := event as InputEventMouseButton
   if mouse.button_index == MOUSE_BUTTON_LEFT:
-   if mouse.pressed and joystick_pointer == -1 and mouse.position.x < 300.0 and mouse.position.y > 265.0:
+   if mouse.pressed and joystick_pointer == -1 and mouse.position.distance_to(joystick_center) < joystick_radius+24.0:
     joystick_pointer=-2
     joystick_active=true
     _move_stick(mouse.position)
@@ -139,7 +145,7 @@ func _move_stick(position: Vector2) -> void:
  joystick_layer.queue_redraw()
 
 func _draw_joystick() -> void:
- if not is_mobile or game_over: return
+ if not is_mobile or game_over or blocked: return
  var center := joystick_center
  joystick_layer.draw_circle(center,joystick_radius+9.0,Color(0.03,0.06,0.08,0.36))
  joystick_layer.draw_arc(center,joystick_radius,0.0,TAU,48,Color(0.68,0.77,0.73,0.57),3.0,true)

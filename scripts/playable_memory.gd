@@ -6,6 +6,9 @@ var pos := Vector2(480,385)
 var step := 0
 var held := Vector2.ZERO
 var clock := 0.0
+var foot_clock := 0.0
+var foot_audio: AudioStreamPlayer
+var clue_audio: AudioStreamPlayer
 var facing := "up"
 var status: Label
 var action: Button
@@ -14,6 +17,14 @@ const WALK = {"up":preload("res://assets/pj_walk_up.png"),"down":preload("res://
 const POINTS = [Vector2(260,220),Vector2(700,220),Vector2(480,385)]
 const CLUES = [["Un billete olvidado. Daniel esperaba aquí.","Daniel: ¿Vas a volver por mí?"],["Registro 07: ensayo de recuperación de recuerdos.","La firma del sujeto te resulta familiar."],["Una campana resuena detrás de la puerta.","Daniel: Dijiste que solo serían unos minutos."],["Reconoces tu propia letra.","Si vuelvo a olvidar, busca a Daniel."]]
 func setup(index: int, heading: String) -> void:
+ foot_audio=AudioStreamPlayer.new()
+ foot_audio.stream=preload("res://assets/audio/step_wood_1.wav")
+ foot_audio.volume_db=-21.0
+ add_child(foot_audio)
+ clue_audio=AudioStreamPlayer.new()
+ clue_audio.stream=preload("res://assets/audio/pickup.wav")
+ clue_audio.volume_db=-18.0
+ add_child(clue_audio)
  fragment=index
  size=Vector2(960,540)
  var title := Label.new()
@@ -58,6 +69,10 @@ func _process(delta: float) -> void:
   pos=pos.clamp(Vector2(185,155),Vector2(775,425))
   facing=("right" if d.x>0 else "left") if absf(d.x)>absf(d.y) else ("down" if d.y>0 else "up")
   clock+=delta
+  foot_clock+=delta
+  if foot_clock>=0.32:
+   foot_clock=0.0
+   foot_audio.play()
  else: clock=0.0
  action.disabled=pos.distance_to(POINTS[step])>55.0
  if Input.is_action_just_pressed("interact"): examine()
@@ -68,6 +83,7 @@ func examine() -> void:
   completed.emit()
   return
  status.text=CLUES[fragment][step]+("  /  Busca el siguiente indicio." if step==0 else "  /  Regresa al punto de entrada.")
+ clue_audio.play()
  step+=1
  if step==2: action.text="REGRESAR [E]"
 func _draw() -> void:

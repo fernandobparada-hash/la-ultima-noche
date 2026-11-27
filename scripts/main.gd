@@ -1,5 +1,9 @@
 extends Node2D
 
+const Chapter = preload("res://scripts/chapter_progress.gd")
+const SaveStore = preload("res://scripts/save_store.gd")
+const LightTextures = preload("res://scripts/light_textures.gd")
+
 const PlayerScript = preload("res://scripts/player.gd")
 const EnemyScript = preload("res://scripts/enemy.gd")
 const MobileControlsScript = preload("res://scripts/mobile_controls.gd")
@@ -182,6 +186,7 @@ func _ready() -> void:
  var fog := FogScript.new()
  add_child(fog)
  fog.visible=NightSettings.fog
+ fog.set_process(NightSettings.fog)
  build_hud()
  build_exploration_ui()
  weather=WeatherScript.new()
@@ -202,7 +207,10 @@ func _ready() -> void:
   load_progress(true)
  show_message(chapter_goal(),5.0)
 
+var soundscape = preload("res://scripts/soundscape.gd").new()
+
 func setup_audio() -> void:
+ add_child(soundscape)
  ambience=AudioStreamPlayer.new()
  ambience.stream=preload("res://assets/audio/ambiente.wav")
  ambience.volume_db=-24.0
@@ -315,12 +323,7 @@ func enemy_path(start: Vector2, finish: Vector2) -> PackedVector2Array:
  return result
 
 func make_glow() -> Texture2D:
- var img := Image.create(96,96,false,Image.FORMAT_RGBA8)
- for y in range(96):
-  for x in range(96):
-   var d := Vector2(x-47.5,y-47.5).length()/47.5
-   img.set_pixel(x,y,Color(1,1,1,pow(maxf(0.0,1.0-d),2.0)))
- return ImageTexture.create_from_image(img)
+ return LightTextures.make_glow()
 
 func build_vignette() -> void:
  # Oscurece los bordes de la pantalla para dar atmósfera y concentrar la vista en el centro.
@@ -355,14 +358,7 @@ var siren_blue: Array[PointLight2D] = []
 var ambient_color := Color("68717a")
 
 func make_soft_light(size: int, power: float) -> Texture2D:
- var img := Image.create(size,size,false,Image.FORMAT_RGBA8)
- var c := (size-1)*0.5
- for y in range(size):
-  for x in range(size):
-   var d := Vector2(x-c,y-c).length()/c
-   var v := pow(maxf(0.0,1.0-d),power)
-   img.set_pixel(x,y,Color(1,1,1,v))
- return ImageTexture.create_from_image(img)
+ return LightTextures.make_soft_light(size,power)
 
 func add_light(pos: Vector2, tex: Texture2D, scale_value: float, energy_value: float, tint: Color) -> PointLight2D:
  var l := PointLight2D.new()
@@ -514,6 +510,16 @@ func build_hud() -> void:
  style_brass_button(document_button)
  document_button.pressed.connect(open_documents)
  tabs.add_child(document_button)
+ var close_bag := Button.new()
+ close_bag.text="CERRAR"
+ style_brass_button(close_bag)
+ close_bag.pressed.connect(func():
+  inventory_open=false
+  inventory_panel.hide()
+  document_panel.hide()
+  paper_reader.hide()
+  player.inventory_locked=false)
+ tabs.add_child(close_bag)
  inventory_count_label=Label.new()
  inventory_count_label.add_theme_font_size_override("font_size",12)
  inventory_count_label.add_theme_color_override("font_color",Color("b9ae95"))
@@ -780,12 +786,15 @@ func respawn_player() -> void:
   show_message("Has vuelto al último punto seguro.",3.0)
 
 func _process(delta: float) -> void:
+ mobile_controls.set_blocked(inventory_open or exploration_panel.visible or journal_open or memory_open or ending_open)
+ var inside := bool(weather.call("sheltered",player.position))
+ soundscape.update_audio(delta,player.position,inside,NightSettings.rain and float(weather.get("intensity"))>0.15,player.light_on,inventory_open,memory_open,game_over or inventory_open or memory_open or journal_open or ending_open or exploration_panel.visible)
  if game_over:
   if Input.is_action_just_pressed("restart"): respawn_player()
   return
  if journal_open or memory_open or ending_open: return
  world_time+=delta
- var outdoors := not bool(weather.call("sheltered",player.position))
+ var outdoors := not inside
  weather.set("outside",outdoors)
  var storm_flash := float(weather.get("flash")) if NightSettings.flashes else 0.0
  update_lighting(delta)
@@ -806,7 +815,6 @@ func _process(delta: float) -> void:
   if exploration_panel.visible: close_exploration()
   else: open_map()
  if exploration_panel.visible:
-  if map_box.visible: map_view.queue_redraw()
   if Input.is_action_just_pressed("ui_cancel"): close_exploration()
   return
  if Input.is_action_just_pressed("inventory") and not game_over:
@@ -838,6 +846,7 @@ func _process(delta: float) -> void:
  if message_time<=0.0: notice.text=""
  if not knocks_triggered and player.position.y>230.0:
   knocks_triggered=true
+  soundscape.cue("knock",-15.0)
   show_message("TOC... TOC... TOC... Algo golpea desde el pasillo.",4.0)
  if Input.is_action_just_pressed("interact") and not game_over and not inventory_open:
   interact()
@@ -856,7 +865,7 @@ func _process(delta: float) -> void:
  if game_over and Input.is_action_just_pressed("restart"):
   respawn_player()
  var status := "INACTIVO" if enemy.defeated else enemy.state
- ui.text="LA ÚLTIMA NOCHE   /   CAPÍTULO I   /   ALPHA 4.4.1\nVIDA %d   ·   ENERGÍA %d   ·   %s   ·   LINTERNA %s" % [int(player.health),int(player.stamina),(player.weapons[player.weapon_index]+(" · ∞" if player.weapons[player.weapon_index]=="Pistola" else "")),("%d%%" % int(player.flashlight_battery))+ (" ENCENDIDA" if player.light_on else " APAGADA")]
+ ui.text="LA ÚLTIMA NOCHE   /   CAPÍTULO I   /   ALPHA 4.7\nVIDA %d   ·   ENERGÍA %d   ·   %s   ·   LINTERNA %s" % [int(player.health),int(player.stamina),(player.weapons[player.weapon_index]+(" · ∞" if player.weapons[player.weapon_index]=="Pistola" else "")),("%d%%" % int(player.flashlight_battery))+ (" ENCENDIDA" if player.light_on else " APAGADA")]
  objective.text=chapter_goal()
  hints.visible=not mobile_controls.is_mobile
  if player.position.x>500.0 and player.position.y>355.0 and not found_exit:
@@ -913,6 +922,7 @@ func interact() -> void:
     var message: String = FURNITURE_NAMES[i][j]+": "+FURNITURE_NOTES[i][j]
     if j==0 and not searched_furniture.has(key):
      inventory_items.append("Batería" if i%2==0 else "Botiquín")
+     soundscape.cue("pickup",-17.0)
      refresh_inventory()
      message += " Encontraste un consumible."
     searched_furniture[key]=true
@@ -934,6 +944,7 @@ func interact() -> void:
    if not visited_houses.has(i):
     visited_houses[i]=true
     inventory_items.append(HOUSE_LOOT[i])
+    soundscape.cue("pickup",-17.0)
     refresh_inventory()
     save_progress()
     show_message(HOUSE_NAMES[i]+": encontraste "+HOUSE_LOOT[i]+". Punto guardado.",4.0)
@@ -950,11 +961,13 @@ func interact() -> void:
   read_letter=true
   if not inventory_items.has("Carta encontrada"):
    inventory_items.append("Carta encontrada")
+   soundscape.cue("pickup",-17.0)
   refresh_inventory()
   show_message("Carta recogida. Consulta Inventario > Documentos.",4.0)
  elif player.position.distance_to(Vector2(365,290))<43.0 and not took_key:
   took_key=true
   inventory_items.append("Llave antigua")
+  soundscape.cue("pickup",-17.0)
   refresh_inventory()
   show_message("Has encontrado una llave antigua. Ahora puedes abrir la puerta principal.",4.0)
  elif player.position.distance_to(Vector2(237,345))<55.0 and not door_open and not door_opening:
@@ -962,6 +975,7 @@ func interact() -> void:
    show_message("La puerta está cerrada. Quizá haya una llave en la cocina.",4.0)
   else:
    door_opening=true
+   soundscape.cue("door",-15.0)
    inventory_items.erase("Llave antigua")
    refresh_inventory()
    show_message("La cerradura cede. La calle está sumida en la niebla.",4.0)
@@ -1121,8 +1135,12 @@ func build_exploration_ui() -> void:
  layout.add_child(close)
  exploration_panel.hide()
 
+var last_reveal_cell := Vector2i(-999,-999)
+
 func reveal_map() -> void:
  var cell := Vector2i((player.position/40.0).floor())
+ if cell == last_reveal_cell: return
+ last_reveal_cell=cell
  for y in range(-1,2):
   for x in range(-1,2):
    var c := cell+Vector2i(x,y)
@@ -1270,6 +1288,7 @@ func check_puzzle() -> void:
   else:
    var reward := "Botiquín" if active_puzzle>=3 else "Batería"
    inventory_items.append(reward)
+   soundscape.cue("pickup",-17.0)
    refresh_inventory()
    puzzle_feedback.text="Abierto. Encontraste: "+reward
   save_progress()
@@ -1552,13 +1571,13 @@ func save_progress() -> void:
  cfg.set_value("run","searched_furniture",searched_furniture)
  cfg.set_value("run","explored",explored)
  cfg.set_value("run","memories",memories)
- var result := cfg.save("user://night_save.cfg")
+ var result := SaveStore.write(cfg)
  show_message("Partida guardada." if result==OK else "No se pudo guardar.",3.0)
  if journal_open: journal_text.text="Partida guardada." if result==OK else "No se pudo guardar."
 
 func load_progress(from_menu: bool = false) -> void:
  var cfg := ConfigFile.new()
- if cfg.load("user://night_save.cfg")!=OK:
+ if SaveStore.read(cfg)!=OK:
   journal_text.text="No hay una partida guardada."
   return
  chapter_complete=bool(cfg.get_value("run","chapter_complete",false))
@@ -1587,6 +1606,7 @@ func load_progress(from_menu: bool = false) -> void:
  visited_houses=cfg.get_value("run","visited",{})
  searched_furniture=cfg.get_value("run","searched_furniture",{})
  explored=cfg.get_value("run","explored",{})
+ last_reveal_cell=Vector2i(-999,-999)
  memories=cfg.get_value("run","memories",{})
  rebuild_navigation()
  if found_exit: spawn_encounter()
@@ -1726,21 +1746,13 @@ func build_end_panel() -> void:
  end_panel.hide()
 
 func chapter_ready() -> bool:
- return read_letter and door_open and solved.count(true)>=6 and memories.size()>=4
+ return Chapter.ready(read_letter,door_open,solved,memories)
 
 func building_rects() -> Array:
  return BUILDINGS
 
 func chapter_goal() -> String:
- if chapter_complete: return "Capítulo I completado · Exploración libre"
- if not read_letter: return "Objetivo: lee la carta de la casa inicial."
- if not took_key: return "Objetivo: busca la llave en la cocina."
- if not door_open: return "Objetivo: abre la puerta principal."
- if not solved[0]: return "Objetivo: resuelve el armario de símbolos."
- if not solved[1]: return "Objetivo: abre la caja del barrio."
- if solved.count(true)<6: return "Objetivo: investiga los mecanismos restantes (%d/6)." % solved.count(true)
- if memories.size()<4: return "Objetivo: recupera los recuerdos (%d/4). Viajero, iglesia, hospital y comisaría." % memories.size()
- return "Objetivo: ve al cementerio y examina el sello del Umbral (marcado en el mapa)."
+ return Chapter.goal(chapter_complete,read_letter,took_key,door_open,solved,memories)
 
 func open_chapter_ending() -> void:
  chapter_ending=true

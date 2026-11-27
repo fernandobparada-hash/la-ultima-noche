@@ -36,7 +36,7 @@ func _ready() -> void:
  var rng := RandomNumberGenerator.new()
  rng.seed = 11
  var count := 0
- while count < 20:
+ while count < (12 if OS.has_feature("mobile") else 20):
   var pos := Vector2(rng.randf_range(0.0,1600.0),rng.randf_range(150.0,590.0))
   # Más niebla en la calle, menos entre las casas del oeste; ninguna dentro de la casa inicial.
   if Rect2(40,40,430,310).has_point(pos): continue
