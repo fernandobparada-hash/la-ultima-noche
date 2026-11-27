@@ -1,0 +1,8 @@
+Alpha 4.3: correcciones y cierre del Capítulo I. Sin prueba de ejecución en Godot.
+- Sello del Umbral movido a (1295,500): ya no pisa el refugio del cementerio (1295,540); vuelven a funcionar el botiquín/batería, el guardado y el punto de retorno allí. El objetivo indica que está marcado en el mapa.
+- HUD: pistas de controles (E, F, I, M, Espacio) bajo el objetivo; se ocultan en móvil.
+- La tecla T (enemigo de prueba) solo funciona en compilaciones de depuración.
+- Guardado: se guarda también knocks_triggered (los golpes iniciales no se repiten al cargar).
+- Pantalla de cierre del capítulo con resumen (mecanismos, recuerdos, refugios) y botones Seguir explorando / Menú principal. El menú muestra "Continuar · Capítulo I completado" si corresponde.
+- weather.gd usa la lista de edificios de main.gd (antes estaba duplicada a mano).
+- Orden del proyecto: CAMBIOS_* y el README antiguo en docs/; referencia/ ignorada por Godot (.gdignore) para no importarla ni exportarla.

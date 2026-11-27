@@ -40,6 +40,10 @@ var effect: AudioStreamPlayer
 var ui: Label
 var notice: Label
 var objective: Label
+var hints: Label
+var ending_open := false
+var end_panel: ColorRect
+var end_stats: Label
 var message_time := 0.0
 var read_letter := false
 var exploration_panel: PanelContainer
@@ -73,6 +77,9 @@ var paper_reader: PanelContainer
 var paper_text: Label
 var took_key := false
 var found_exit := false
+var chapter_complete := false
+var chapter_ending := false
+const CHAPTER_END := Vector2(1295,500) # a 40 px del refugio del cementerio (1295,540) para no pisarlo
 var knocks_triggered := false
 var door_open := false
 var door_progress: float = 0.0
@@ -173,6 +180,7 @@ func _ready() -> void:
  weather.set("enabled",NightSettings.rain)
  build_journal()
  build_memory_ui()
+ build_end_panel()
  mobile_controls = MobileControlsScript.new()
  add_child(mobile_controls)
  # CanvasLayer mantiene HUD y controles a escala de pantalla.
@@ -183,7 +191,7 @@ func _ready() -> void:
  if NightSettings.resume_requested:
   NightSettings.resume_requested=false
   load_progress(true)
- show_message("Despiertas en una casa desconocida. Busca respuestas.",5.0)
+ show_message(chapter_goal(),5.0)
 
 func setup_audio() -> void:
  ambience=AudioStreamPlayer.new()
@@ -218,7 +226,7 @@ func _on_omen(message: String) -> void:
  flicker=2.0
 
 func update_tension(delta: float) -> void:
- if game_over or inventory_open or exploration_panel.visible or memory_open: return
+ if game_over or inventory_open or exploration_panel.visible or memory_open or ending_open: return
  var pursuing: int = 0
  for foe in foes:
   if not foe.defeated and foe.state=="PERSECUCION": pursuing+=1
@@ -439,6 +447,12 @@ func build_hud() -> void:
  objective.add_theme_font_size_override("font_size",15)
  objective.add_theme_color_override("font_color",Color("d6c099"))
  canvas.add_child(objective)
+ hints=Label.new()
+ hints.position=Vector2(20,104)
+ hints.add_theme_font_size_override("font_size",12)
+ hints.add_theme_color_override("font_color",Color("8f8366"))
+ hints.text="[E] EXAMINAR   [F] LINTERNA   [I] INVENTARIO   [M] MAPA   [ESPACIO] ESQUIVAR"
+ canvas.add_child(hints)
  notice=Label.new()
  notice.position=Vector2(20,113)
  notice.add_theme_font_size_override("font_size",18)
@@ -635,7 +649,7 @@ func _process(delta: float) -> void:
  if game_over:
   if Input.is_action_just_pressed("restart"): respawn_player()
   return
- if journal_open or memory_open: return
+ if journal_open or memory_open or ending_open: return
  world_time+=delta
  var outdoors := not bool(weather.call("sheltered",player.position))
  weather.set("outside",outdoors)
@@ -667,7 +681,7 @@ func _process(delta: float) -> void:
   inventory_panel.visible=inventory_open
   player.inventory_locked=inventory_open
   refresh_inventory()
- if Input.is_action_just_pressed("change_enemy") and not game_over and not inventory_open:
+ if OS.is_debug_build() and Input.is_action_just_pressed("change_enemy") and not game_over and not inventory_open:
   enemy.change_type()
   show_message("Enemigo de prueba: "+enemy.enemy_type,3.0)
  if inventory_open:
@@ -697,8 +711,9 @@ func _process(delta: float) -> void:
  if game_over and Input.is_action_just_pressed("restart"):
   respawn_player()
  var status := "INACTIVO" if enemy.defeated else enemy.state
- ui.text="LA ÚLTIMA NOCHE   /   CAPÍTULO CERO   /   ALPHA 4.1\nVIDA %d   ·   ENERGÍA %d   ·   %s   ·   LINTERNA %s" % [int(player.health),int(player.stamina),(player.weapons[player.weapon_index]+(" · ∞" if player.weapons[player.weapon_index]=="Pistola" else "")),("%d%%" % int(player.flashlight_battery))+ (" ENCENDIDA" if player.light_on else " APAGADA")]
- objective.text="[I] INVENTARIO   [ESPACIO] ESQUIVAR   [M] MAPA  /  %s" % ["Explora la calle y evita al Errante" if found_exit else ("Abre la puerta de salida" if took_key else "Busca la llave en la cocina")]
+ ui.text="LA ÚLTIMA NOCHE   /   CAPÍTULO I   /   ALPHA 4.3\nVIDA %d   ·   ENERGÍA %d   ·   %s   ·   LINTERNA %s" % [int(player.health),int(player.stamina),(player.weapons[player.weapon_index]+(" · ∞" if player.weapons[player.weapon_index]=="Pistola" else "")),("%d%%" % int(player.flashlight_battery))+ (" ENCENDIDA" if player.light_on else " APAGADA")]
+ objective.text=chapter_goal()
+ hints.visible=not mobile_controls.is_mobile
  if player.position.x>500.0 and player.position.y>355.0 and not found_exit:
   found_exit=true
   spawn_encounter()
@@ -735,6 +750,14 @@ func _on_player_hurt(_amount: float) -> void:
  show_message("Un enemigo te ha alcanzado. Aléjate o utiliza una cobertura.",2.0)
 
 func interact() -> void:
+ if player.position.distance_to(CHAPTER_END)<30.0:
+  if chapter_complete:
+   show_message("Capítulo I completado. Puedes seguir explorando.",4.0)
+  elif chapter_ready():
+   open_chapter_ending()
+  else:
+   show_message(chapter_goal(),5.0)
+  return
  for i in range(BUILDINGS.size()):
   var room: Rect2 = BUILDINGS[i]
   if not room.has_point(player.position): continue
@@ -828,6 +851,8 @@ func _draw() -> void:
  draw_rect(Rect2(43,-2,4,4),Color("d4b577"))
  draw_set_transform(Vector2.ZERO)
  draw_rect(Rect2(210,340,4,6),Color("55534c"))
+ if chapter_ready() and not chapter_complete:
+  draw_arc(CHAPTER_END,12.0,0,TAU,32,Color("d6bb88"),2.0)
  # Clues, no giant glowing arrows.
  draw_rect(Rect2(185,150,11,9),Color("d9d0b7"))
  draw_line(Vector2(187,154),Vector2(193,154),Color("8b8172"),1.0)
@@ -965,7 +990,7 @@ func open_map() -> void:
  active_puzzle=-1
  map_box.show()
  puzzle_box.hide()
- map_status.text="Mecanismos resueltos: %d / 6" % (solved.count(true))
+ map_status.text=chapter_goal()
  exploration_panel.show()
  player.inventory_locked=true
  map_view.queue_redraw()
@@ -1047,6 +1072,9 @@ func draw_exploration_map() -> void:
  map_view.draw_string(font,lg.position+Vector2(26,55),"Resuelto",HORIZONTAL_ALIGNMENT_LEFT,-1,14,ink)
  # Marcador del jugador con pulso.
  var t := float(Time.get_ticks_msec())/1000.0
+ if chapter_ready() and not chapter_complete:
+  map_view.draw_circle(CHAPTER_END*factor,6.0,Color("b08d57"))
+  map_view.draw_string(font,CHAPTER_END*factor+Vector2(9,-5),"Umbral",HORIZONTAL_ALIGNMENT_LEFT,-1,13,ink)
  var pp: Vector2=player.position*factor
  var pulse := fmod(t*0.9,1.0)
  map_view.draw_arc(pp,5.0+pulse*12.0,0.0,TAU,24,Color(0.69,0.19,0.16,0.7*(1.0-pulse)),2.0)
@@ -1347,19 +1375,21 @@ func toggle_weather() -> void:
  weather.queue_redraw()
 
 func toggle_journal() -> void:
- if game_over or inventory_open or exploration_panel.visible or memory_open: return
+ if game_over or inventory_open or exploration_panel.visible or memory_open or ending_open: return
  journal_open=not journal_open
  journal_panel.visible=journal_open
  player.inventory_locked=journal_open
  for foe in foes: foe.set_physics_process(not journal_open)
  if journal_open:
-  journal_text.text="CAPÍTULO CERO\n"+("Carta encontrada. " if read_letter else "Busca la carta de la casa. ")+("Salida abierta." if door_open else "Encuentra la llave y abre la salida.")+"\nMecanismos resueltos: %d / 6\nRefugios visitados: %d / 9" % [solved.count(true),visited_houses.size()]
+  journal_text.text="CAPÍTULO I — EL DESPERTAR\n"+chapter_goal()+"\n\n"+("Carta encontrada. " if read_letter else "Busca la carta de la casa. ")+("Salida abierta." if door_open else "Encuentra la llave y abre la salida.")+"\nMecanismos resueltos: %d / 6\nRefugios visitados: %d / 9" % [solved.count(true),visited_houses.size()]
   journal_text.text+="\nRecuerdos: %d / 4" % memories.size()
   for i in range(MEMORY_TITLES.size()):
    if memories.has(i): journal_text.text+="\n• "+MEMORY_TITLES[i]
 
 func save_progress() -> void:
  var cfg := ConfigFile.new()
+ cfg.set_value("run","chapter_complete",chapter_complete)
+ cfg.set_value("run","knocks",knocks_triggered)
  cfg.set_value("run","difficulty",NightSettings.difficulty)
  cfg.set_value("run","position",player.position)
  cfg.set_value("run","checkpoint",checkpoint)
@@ -1384,6 +1414,8 @@ func load_progress(from_menu: bool = false) -> void:
  if cfg.load("user://night_save.cfg")!=OK:
   journal_text.text="No hay una partida guardada."
   return
+ chapter_complete=bool(cfg.get_value("run","chapter_complete",false))
+ knocks_triggered=bool(cfg.get_value("run","knocks",false))
  NightSettings.difficulty=clampi(int(cfg.get_value("run","difficulty",1)),0,2)
  player.flashlight_drain=0.15*[0.65,1.0,1.5][NightSettings.difficulty]
  player.position=cfg.get_value("run","position",Vector2(170,130))
@@ -1461,8 +1493,104 @@ func open_memory(index: int) -> void:
  create_tween().tween_property(memory_panel,"modulate:a",1.0,0.45)
 
 func close_memory() -> void:
+ var finished := chapter_ending
+ chapter_ending=false
  memory_panel.hide()
  memory_open=false
  player.inventory_locked=false
  for foe in foes: foe.set_physics_process(true)
- show_message("Fragmento añadido al diario.",3.0)
+ if finished:
+  chapter_complete=true
+  checkpoint=player.position
+  save_progress()
+  show_end_panel()
+ else:
+  show_message("Fragmento añadido al diario.",3.0)
+
+func show_end_panel() -> void:
+ ending_open=true
+ player.inventory_locked=true
+ player.velocity=Vector2.ZERO
+ for foe in foes: foe.set_physics_process(false)
+ end_stats.text="Mecanismos resueltos: %d / 6\nRecuerdos recuperados: %d / 4\nRefugios visitados: %d / 9" % [solved.count(true),memories.size(),visited_houses.size()]
+ end_panel.modulate.a=0.0
+ end_panel.show()
+ create_tween().tween_property(end_panel,"modulate:a",1.0,0.8)
+
+func continue_after_ending() -> void:
+ end_panel.hide()
+ ending_open=false
+ player.inventory_locked=false
+ for foe in foes: foe.set_physics_process(true)
+ show_message("Exploración libre. Tu progreso está guardado.",4.0)
+
+func back_to_menu() -> void:
+ get_tree().change_scene_to_file("res://scenes/title_menu.tscn")
+
+func build_end_panel() -> void:
+ var layer := CanvasLayer.new()
+ layer.layer=13
+ add_child(layer)
+ end_panel=ColorRect.new()
+ end_panel.color=Color(0.02,0.025,0.03,0.99)
+ end_panel.size=Vector2(960,540)
+ layer.add_child(end_panel)
+ var box := VBoxContainer.new()
+ box.position=Vector2(230,120)
+ box.size=Vector2(500,320)
+ box.add_theme_constant_override("separation",18)
+ end_panel.add_child(box)
+ var small := Label.new()
+ small.text="P R O Y E C T O   U M B R A L"
+ small.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
+ small.add_theme_color_override("font_color",Color("a28a62"))
+ box.add_child(small)
+ var title := Label.new()
+ title.text="CAPÍTULO I COMPLETADO"
+ title.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
+ title.add_theme_font_size_override("font_size",36)
+ title.add_theme_color_override("font_color",Color("e0c9a4"))
+ box.add_child(title)
+ end_stats=Label.new()
+ end_stats.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
+ end_stats.add_theme_font_size_override("font_size",18)
+ end_stats.add_theme_color_override("font_color",Color("d6bb88"))
+ box.add_child(end_stats)
+ var again := Button.new()
+ again.text="SEGUIR EXPLORANDO"
+ again.pressed.connect(continue_after_ending)
+ box.add_child(again)
+ var menu := Button.new()
+ menu.text="MENÚ PRINCIPAL"
+ menu.pressed.connect(back_to_menu)
+ box.add_child(menu)
+ end_panel.hide()
+
+func chapter_ready() -> bool:
+ return read_letter and door_open and solved.count(true)>=6 and memories.size()>=4
+
+func building_rects() -> Array:
+ return BUILDINGS
+
+func chapter_goal() -> String:
+ if chapter_complete: return "Capítulo I completado · Exploración libre"
+ if not read_letter: return "Objetivo: lee la carta de la casa inicial."
+ if not took_key: return "Objetivo: busca la llave en la cocina."
+ if not door_open: return "Objetivo: abre la puerta principal."
+ if not solved[0]: return "Objetivo: resuelve el armario de símbolos."
+ if not solved[1]: return "Objetivo: abre la caja del barrio."
+ if solved.count(true)<6: return "Objetivo: investiga los mecanismos restantes (%d/6)." % solved.count(true)
+ if memories.size()<4: return "Objetivo: recupera los recuerdos (%d/4). Viajero, iglesia, hospital y comisaría." % memories.size()
+ return "Objetivo: ve al cementerio y examina el sello del Umbral (marcado en el mapa)."
+
+func open_chapter_ending() -> void:
+ chapter_ending=true
+ memory_open=true
+ player.inventory_locked=true
+ player.velocity=Vector2.ZERO
+ for foe in foes: foe.set_physics_process(false)
+ memory_title.text="El despertar · Fin del capítulo I"
+ memory_text.text="El sello responde a los seis mecanismos. Entre las inscripciones encuentras tu propia firma y una fecha que no recuerdas. Daniel estuvo aquí. Una campana resuena en la distancia.\n\nEl Proyecto Umbral todavía no ha terminado."
+ memory_panel.modulate.a=0.0
+ memory_panel.show()
+ create_tween().tween_property(memory_panel,"modulate:a",1.0,0.45)

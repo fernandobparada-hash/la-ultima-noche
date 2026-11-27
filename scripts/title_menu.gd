@@ -3,7 +3,7 @@ extends Control
 # Fondo animado (deriva lenta, niebla, lluvia, relámpagos), protagonista en reposo,
 # título con parpadeo, navegación por teclado/mando, transición de entrada y salida.
 
-const VERSION_TEXT := "CAPÍTULO CERO  /  ALPHA 4.1"
+const VERSION_TEXT := "CAPÍTULO I  /  ALPHA 4.3"
 const GOLD := Color("e0c9a4")
 const GOLD_DIM := Color(0.62, 0.55, 0.42, 1.0)
 
@@ -160,7 +160,7 @@ func _ready() -> void:
 	margin.add_child(panel)
 
 	var ver := Label.new()
-	ver.text = "v4.1"
+	ver.text = "v4.3"
 	ver.add_theme_font_size_override("font_size", 12)
 	ver.add_theme_color_override("font_color", Color(0.5, 0.46, 0.38, 0.8))
 	ver.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
@@ -326,7 +326,8 @@ func home() -> void:
 	spacer(6)
 	var cfg := ConfigFile.new()
 	var has_save := cfg.load("user://night_save.cfg") == OK
-	var resume := button("Continuar", start.bind(true))
+	var done := has_save and bool(cfg.get_value("run","chapter_complete",false))
+	var resume := button("Continuar  ·  Capítulo I completado" if done else "Continuar", start.bind(true))
 	resume.disabled = not has_save
 	var new_btn := button("Nueva partida", new_game)
 	button("Ajustes", options)

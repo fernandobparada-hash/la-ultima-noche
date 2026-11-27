@@ -1,0 +1,1 @@
+Alpha 4.2: objetivos narrativos, final en cementerio, marcador y persistencia del capítulo. Sin prueba de ejecución en Godot.

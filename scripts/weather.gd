@@ -11,6 +11,7 @@ var rain: AudioStreamPlayer
 var rain_fx: CPUParticles2D
 var rain_fade := 0.0
 var ripple_points: Array[Vector2] = []
+var buildings: Array = []
 
 func make_streak() -> Texture2D:
  var img := Image.create(3,18,false,Image.FORMAT_RGBA8)
@@ -23,6 +24,8 @@ func make_streak() -> Texture2D:
 
 func _ready() -> void:
  z_index=8
+ if get_parent() != null and get_parent().has_method("building_rects"):
+  buildings=get_parent().call("building_rects")
  rain=AudioStreamPlayer.new()
  rain.stream=preload("res://assets/audio/rain_loop.wav")
  add_child(rain)
@@ -89,7 +92,7 @@ func _process(delta: float) -> void:
  queue_redraw()
 func sheltered(p: Vector2) -> bool:
  if Rect2(40,40,430,310).has_point(p): return true
- for area: Rect2 in [Rect2(550,38,155,100),Rect2(790,48,154,100),Rect2(600,205,145,100),Rect2(810,215,145,100),Rect2(1050,75,210,125),Rect2(1330,75,210,125),Rect2(1050,275,210,125),Rect2(1330,275,210,125),Rect2(1190,480,210,110)]:
+ for area: Rect2 in buildings:
   if area.has_point(p): return true
  return false
 func _draw() -> void:
